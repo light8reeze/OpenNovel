@@ -1,0 +1,9 @@
+{
+  "name": "novel-gg",
+  "private": true,
+  "scripts": {
+    "start:app": "./scripts/start-app.sh",
+    "backend:demo": "cargo run --manifest-path backend/Cargo.toml -p api -- --demo",
+    "backend:serve": "cargo run --manifest-path backend/Cargo.toml -p api"
+  }
+}

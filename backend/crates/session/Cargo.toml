@@ -1,0 +1,11 @@
+[package]
+name = "session"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[dependencies]
+content = { path = "../content" }
+domain = { path = "../domain" }
+engine = { path = "../engine" }
+narrative = { path = "../narrative" }

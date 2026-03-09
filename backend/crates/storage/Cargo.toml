@@ -1,0 +1,8 @@
+[package]
+name = "storage"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[dependencies]
+domain = { path = "../domain" }

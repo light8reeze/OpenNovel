@@ -1,0 +1,15 @@
+{
+  "id": "murder_case",
+  "title": "The Blood in the Rain",
+  "stages": [
+    { "stage": 0, "summary": "A scream was heard near the square." },
+    { "stage": 1, "summary": "A blood mark points toward the warehouse." },
+    { "stage": 2, "summary": "A bloody cloth was found in the warehouse." },
+    { "stage": 3, "summary": "Aria confirms a shadow fled toward the alley." },
+    { "stage": 4, "summary": "Footprints lead from the alley to the tavern." },
+    { "stage": 5, "summary": "The innkeeper provides testimony about the suspect." },
+    { "stage": 6, "summary": "The truth is revealed and the case is closed." },
+    { "stage": 99, "summary": "You fled and the truth remained buried." }
+  ],
+  "endings": ["truth_revealed", "cowardice"]
+}

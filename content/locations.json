@@ -1,0 +1,26 @@
+[
+  {
+    "id": "village_square",
+    "name": "Village Square",
+    "description": "A damp square lit by dying lanterns.",
+    "connections": ["village_warehouse", "crooked_tavern"]
+  },
+  {
+    "id": "village_warehouse",
+    "name": "Village Warehouse",
+    "description": "A shuttered warehouse that smells of rust and rain.",
+    "connections": ["village_square", "dark_alley"]
+  },
+  {
+    "id": "dark_alley",
+    "name": "Dark Alley",
+    "description": "A narrow lane where footsteps echo too long.",
+    "connections": ["village_warehouse", "crooked_tavern"]
+  },
+  {
+    "id": "crooked_tavern",
+    "name": "Crooked Tavern",
+    "description": "A noisy tavern trying too hard to feel safe.",
+    "connections": ["village_square", "dark_alley"]
+  }
+]

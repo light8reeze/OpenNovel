@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Novel GG MVP</title>
+    <link rel="stylesheet" href="/frontend/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="story-panel">
+        <header class="story-header">
+          <div>
+            <p class="eyebrow">AI Novel Player</p>
+            <h1>Blood In The Rain</h1>
+          </div>
+          <button id="start-button" class="ghost">새 세션 시작</button>
+        </header>
+        <div id="log" class="log"></div>
+        <div id="choices" class="choices"></div>
+        <form id="input-form" class="input-row">
+          <input id="input" name="input" autocomplete="off" placeholder="행동을 입력하세요" />
+          <button type="submit">전송</button>
+        </form>
+      </section>
+      <aside class="state-panel">
+        <p class="eyebrow">State</p>
+        <div id="state"></div>
+      </aside>
+    </main>
+    <script src="/frontend/app.js"></script>
+  </body>
+  </html>

@@ -1,0 +1,148 @@
+:root {
+  --bg: #111315;
+  --panel: #171c20;
+  --panel-alt: #1f262b;
+  --text: #f3efe6;
+  --muted: #a89f90;
+  --accent: #c24d3d;
+  --accent-soft: #5c2a24;
+  --line: rgba(243, 239, 230, 0.12);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  background:
+    radial-gradient(circle at top, rgba(194, 77, 61, 0.18), transparent 30%),
+    linear-gradient(180deg, #090a0b 0%, var(--bg) 100%);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+.shell {
+  width: min(1120px, calc(100% - 32px));
+  margin: 24px auto;
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 20px;
+}
+
+.story-panel,
+.state-panel {
+  background: linear-gradient(180deg, rgba(23, 28, 32, 0.96), rgba(15, 18, 20, 0.96));
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 20px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.28);
+}
+
+.story-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.eyebrow {
+  margin: 0 0 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(28px, 4vw, 46px);
+}
+
+.log {
+  min-height: 420px;
+  max-height: 60vh;
+  overflow: auto;
+  margin: 20px 0 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.message {
+  padding: 14px 16px;
+  border-radius: 16px;
+  line-height: 1.6;
+  border: 1px solid var(--line);
+}
+
+.message.ai {
+  background: rgba(194, 77, 61, 0.12);
+}
+
+.message.player {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.choice,
+button,
+input {
+  font: inherit;
+}
+
+.choice,
+button {
+  border: 1px solid rgba(194, 77, 61, 0.5);
+  background: var(--accent-soft);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 10px 14px;
+  cursor: pointer;
+}
+
+.ghost {
+  background: transparent;
+}
+
+.input-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+}
+
+input {
+  width: 100%;
+  border-radius: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  background: var(--panel-alt);
+  color: var(--text);
+}
+
+dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px 12px;
+  margin: 0;
+}
+
+dt {
+  color: var(--muted);
+}
+
+dd {
+  margin: 0;
+}
+
+@media (max-width: 860px) {
+  .shell {
+    grid-template-columns: 1fr;
+  }
+}
