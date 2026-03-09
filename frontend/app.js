@@ -3,9 +3,11 @@ const choicesEl = document.getElementById("choices");
 const stateEl = document.getElementById("state");
 const formEl = document.getElementById("input-form");
 const inputEl = document.getElementById("input");
+const geminiKeyEl = document.getElementById("gemini-key");
 const startButton = document.getElementById("start-button");
 
 let sessionId = localStorage.getItem("novel-gg-session");
+geminiKeyEl.value = localStorage.getItem("novel-gg-gemini-key") || "";
 
 function appendMessage(role, content) {
   const item = document.createElement("article");
@@ -40,7 +42,20 @@ function renderState(state) {
 }
 
 async function startGame() {
-  const response = await fetch("/game/start", { method: "POST" });
+  const geminiApiKey = geminiKeyEl.value.trim();
+  if (geminiApiKey) {
+    localStorage.setItem("novel-gg-gemini-key", geminiApiKey);
+  } else {
+    localStorage.removeItem("novel-gg-gemini-key");
+  }
+
+  const response = await fetch("/game/start", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      geminiApiKey: geminiApiKey || undefined,
+    }),
+  });
   const data = await response.json();
   sessionId = data.sessionId;
   localStorage.setItem("novel-gg-session", sessionId);

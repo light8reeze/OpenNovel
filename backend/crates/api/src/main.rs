@@ -8,7 +8,7 @@ use axum::{
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
-use session::GameSessionService;
+use session::{GameSessionService, StartOptions};
 
 #[derive(Clone)]
 struct AppState {
@@ -40,6 +40,14 @@ struct StartResponse {
     state: domain::GameState,
 }
 
+#[derive(Debug, Deserialize, Default)]
+struct StartRequest {
+    #[serde(rename = "geminiApiKey")]
+    gemini_api_key: Option<String>,
+    #[serde(rename = "geminiModel")]
+    gemini_model: Option<String>,
+}
+
 #[derive(Debug, Serialize)]
 struct ActionResponse {
     narrative: String,
@@ -54,7 +62,7 @@ async fn main() {
     let service = Arc::new(GameSessionService::new(repo_content_root()));
 
     if env::args().any(|arg| arg == "--demo") {
-        run_demo(service);
+        run_demo(service).await;
         return;
     }
 
@@ -75,8 +83,8 @@ async fn main() {
         .expect("serve app");
 }
 
-fn run_demo(service: Arc<GameSessionService>) {
-    let turns = service.demo_script().expect("run demo");
+async fn run_demo(service: Arc<GameSessionService>) {
+    let turns = service.demo_script().await.expect("run demo");
     for (index, turn) in turns.iter().enumerate() {
         println!(
             "[turn {}] code={} stage={} narrative={}",
@@ -106,8 +114,25 @@ async fn frontend_styles() -> impl IntoResponse {
     )
 }
 
-async fn start_game(State(state): State<AppState>) -> Result<Json<StartResponse>, ApiError> {
-    let (session_id, turn) = state.service.start_game().map_err(ApiError::internal)?;
+async fn start_game(
+    State(state): State<AppState>,
+    payload: Option<Json<StartRequest>>,
+) -> Result<Json<StartResponse>, ApiError> {
+    let payload = payload.map(|value| value.0).unwrap_or_default();
+    let api_key = payload
+        .gemini_api_key
+        .or_else(|| env::var("GEMINI_API_KEY").ok());
+    let model = payload
+        .gemini_model
+        .or_else(|| env::var("GEMINI_MODEL").ok());
+    let (session_id, turn) = state
+        .service
+        .start_game(StartOptions {
+            gemini_api_key: api_key,
+            gemini_model: model,
+        })
+        .await
+        .map_err(ApiError::internal)?;
     Ok(Json(StartResponse {
         session_id,
         narrative: turn.narrative,
@@ -134,6 +159,7 @@ async fn apply_action(
     let turn = state
         .service
         .apply_input(&payload.session_id, input)
+        .await
         .map_err(ApiError::from_session)?;
     Ok(Json(ActionResponse {
         narrative: turn.narrative,

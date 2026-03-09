@@ -9,11 +9,24 @@ use std::{
 use content::ContentBundle;
 use domain::{initial_state, GameState, TurnResult};
 use engine::resolve_text_action;
-use narrative::{opening_narrative, render_turn};
+use narrative::{opening_narrative_with_gemini, render_turn_with_gemini, GeminiConfig};
+
+#[derive(Clone)]
+struct SessionRecord {
+    state: GameState,
+    gemini: Option<GeminiConfig>,
+}
+
+#[derive(Clone, Default)]
+pub struct StartOptions {
+    pub gemini_api_key: Option<String>,
+    pub gemini_model: Option<String>,
+}
+
 #[derive(Clone)]
 pub struct GameSessionService {
     content_root: PathBuf,
-    sessions: Arc<Mutex<HashMap<String, GameState>>>,
+    sessions: Arc<Mutex<HashMap<String, SessionRecord>>>,
 }
 
 impl GameSessionService {
@@ -24,11 +37,13 @@ impl GameSessionService {
         }
     }
 
-    pub fn start_game(&self) -> Result<(String, TurnResult), String> {
+    pub async fn start_game(&self, options: StartOptions) -> Result<(String, TurnResult), String> {
         let session_id = next_session_id();
         let state = initial_state();
         let content = self.content()?;
-        let (narrative, choices) = opening_narrative(&state, &content);
+        let gemini = build_gemini_config(options);
+        let (narrative, choices) =
+            opening_narrative_with_gemini(&state, &content, gemini.as_ref()).await;
         let turn = TurnResult {
             narrative,
             choices,
@@ -46,24 +61,39 @@ impl GameSessionService {
         self.sessions
             .lock()
             .map_err(|_| "session lock poisoned".to_string())?
-            .insert(session_id.clone(), state);
+            .insert(
+                session_id.clone(),
+                SessionRecord {
+                    state,
+                    gemini,
+                },
+            );
 
         Ok((session_id, turn))
     }
 
-    pub fn apply_input(&self, session_id: &str, input: &str) -> Result<TurnResult, String> {
+    pub async fn apply_input(&self, session_id: &str, input: &str) -> Result<TurnResult, String> {
         let content = self.content()?;
-        let mut sessions = self
-            .sessions
-            .lock()
-            .map_err(|_| "session lock poisoned".to_string())?;
-        let state = sessions
-            .get(session_id)
-            .cloned()
-            .ok_or_else(|| "session not found".to_string())?;
+        let session = {
+            let sessions = self
+                .sessions
+                .lock()
+                .map_err(|_| "session lock poisoned".to_string())?;
+            sessions
+                .get(session_id)
+                .cloned()
+                .ok_or_else(|| "session not found".to_string())?
+        };
+        let state = session.state;
 
         let resolution = resolve_text_action(&state, &content, input);
-        let (narrative, choices) = render_turn(&resolution.next_state, &resolution.engine_result, &content);
+        let (narrative, choices) = render_turn_with_gemini(
+            &resolution.next_state,
+            &resolution.engine_result,
+            &content,
+            session.gemini.as_ref(),
+        )
+        .await;
         let turn = TurnResult {
             narrative,
             choices,
@@ -71,7 +101,16 @@ impl GameSessionService {
             engine_result: resolution.engine_result,
         };
 
-        sessions.insert(session_id.to_string(), resolution.next_state);
+        self.sessions
+            .lock()
+            .map_err(|_| "session lock poisoned".to_string())?
+            .insert(
+            session_id.to_string(),
+            SessionRecord {
+                state: resolution.next_state,
+                gemini: session.gemini,
+            },
+        );
         Ok(turn)
     }
 
@@ -80,12 +119,12 @@ impl GameSessionService {
             .lock()
             .map_err(|_| "session lock poisoned".to_string())?
             .get(session_id)
-            .cloned()
+            .map(|session| session.state.clone())
             .ok_or_else(|| "session not found".to_string())
     }
 
-    pub fn demo_script(&self) -> Result<Vec<TurnResult>, String> {
-        let (session_id, start) = self.start_game()?;
+    pub async fn demo_script(&self) -> Result<Vec<TurnResult>, String> {
+        let (session_id, start) = self.start_game(StartOptions::default()).await?;
         let mut turns = vec![start];
         for input in [
             "주변을 조사한다",
@@ -98,7 +137,7 @@ impl GameSessionService {
             "아리아와 대화한다",
             "주변을 조사한다",
         ] {
-            turns.push(self.apply_input(&session_id, input)?);
+            turns.push(self.apply_input(&session_id, input).await?);
         }
         Ok(turns)
     }
@@ -118,16 +157,33 @@ fn next_session_id() -> String {
     format!("session-{}-{}", timestamp, sequence)
 }
 
+fn build_gemini_config(options: StartOptions) -> Option<GeminiConfig> {
+    let api_key = options
+        .gemini_api_key
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())?;
+    let model = options
+        .gemini_model
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "models/gemini-2.5-flash".to_string());
+    Some(GeminiConfig { api_key, model })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn session_can_progress_multiple_turns() {
+    #[tokio::test]
+    async fn session_can_progress_multiple_turns() {
         let service = GameSessionService::new(repo_content_root());
-        let (session_id, _) = service.start_game().expect("game start");
+        let (session_id, _) = service
+            .start_game(StartOptions::default())
+            .await
+            .expect("game start");
         let turn = service
             .apply_input(&session_id, "주변을 조사한다")
+            .await
             .expect("first turn");
         assert_eq!(turn.state.quests.murder_case.stage, 1);
         let loaded = service.get_state(&session_id).expect("state");

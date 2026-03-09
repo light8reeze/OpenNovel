@@ -47,6 +47,12 @@ body {
   gap: 16px;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .eyebrow {
   margin: 0 0 6px;
   text-transform: uppercase;
@@ -126,6 +132,10 @@ input {
   color: var(--text);
 }
 
+#gemini-key {
+  min-width: min(280px, 40vw);
+}
+
 dl {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -144,5 +154,15 @@ dd {
 @media (max-width: 860px) {
   .shell {
     grid-template-columns: 1fr;
+  }
+
+  .story-header,
+  .header-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  #gemini-key {
+    min-width: 0;
   }
 }
