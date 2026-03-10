@@ -1,5 +1,5 @@
 use content::ContentBundle;
-use domain::{EngineResult, GameState};
+use domain::{debug_log, EngineResult, GameState};
 use serde::{Deserialize, Serialize};
 use std::process::Command;
 
@@ -52,6 +52,18 @@ struct NarrativeJson {
     choices: Vec<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NarrativeSource {
+    Gemini,
+    Fallback,
+}
+
+pub struct NarrativeTurn {
+    pub narrative: String,
+    pub choices: Vec<String>,
+    pub source: NarrativeSource,
+}
+
 pub fn opening_narrative(state: &GameState, content: &ContentBundle) -> (String, Vec<String>) {
     let location = content.location_name(&state.player.location_id);
     let narrative = format!(
@@ -66,10 +78,10 @@ pub async fn opening_narrative_with_gemini(
     state: &GameState,
     content: &ContentBundle,
     config: Option<&GeminiConfig>,
-) -> (String, Vec<String>) {
+) -> NarrativeTurn {
     let fallback = opening_narrative(state, content);
     let Some(config) = config else {
-        return fallback;
+        return fallback_turn(fallback);
     };
 
     let prompt = format!(
@@ -94,7 +106,7 @@ JSON 형식: {{\"narrative\":\"...\",\"choices\":[\"...\",\"...\"]}}\n\
         state.player.flags,
     );
 
-    generate_json_narrative(config, prompt, fallback).await
+    generate_json_narrative(config, prompt, fallback, "opening_narrative").await
 }
 
 pub fn render_turn(
@@ -142,10 +154,10 @@ pub async fn render_turn_with_gemini(
     engine_result: &EngineResult,
     content: &ContentBundle,
     config: Option<&GeminiConfig>,
-) -> (String, Vec<String>) {
+) -> NarrativeTurn {
     let fallback = render_turn(state, engine_result, content);
     let Some(config) = config else {
-        return fallback;
+        return fallback_turn(fallback);
     };
 
     let prompt = format!(
@@ -180,7 +192,7 @@ JSON 형식: {{\"narrative\":\"...\",\"choices\":[\"...\",\"...\"]}}\n\
         engine_result.ending_reached,
     );
 
-    generate_json_narrative(config, prompt, fallback).await
+    generate_json_narrative(config, prompt, fallback, "turn_narrative").await
 }
 
 pub fn choices_for_state(state: &GameState) -> Vec<String> {
@@ -213,14 +225,39 @@ async fn generate_json_narrative(
     config: &GeminiConfig,
     prompt: String,
     fallback: (String, Vec<String>),
-) -> (String, Vec<String>) {
+    kind: &str,
+) -> NarrativeTurn {
+    let fallback_turn = fallback_turn(fallback);
+    debug_log(
+        "gemini_narrative_request",
+        &[
+            ("kind", kind.to_string()),
+            ("model", normalize_model(&config.model)),
+            ("prompt_chars", prompt.chars().count().to_string()),
+        ],
+    );
     match request_gemini(config, prompt).await {
         Ok(parsed) if !parsed.narrative.trim().is_empty() && parsed.choices.len() >= 2 => {
             let mut choices = parsed.choices;
             choices.truncate(4);
-            (parsed.narrative, choices)
+            NarrativeTurn {
+                narrative: parsed.narrative,
+                choices,
+                source: NarrativeSource::Gemini,
+            }
         }
-        _ => fallback,
+        Ok(_) => fallback_turn,
+        Err(error) => {
+            debug_log(
+                "gemini_narrative_fallback",
+                &[
+                    ("kind", kind.to_string()),
+                    ("reason", error),
+                    ("model", normalize_model(&config.model)),
+                ],
+            );
+            fallback_turn
+        }
     }
 }
 
@@ -293,5 +330,13 @@ fn normalize_model(model: &str) -> String {
         model.to_string()
     } else {
         format!("models/{}", model)
+    }
+}
+
+fn fallback_turn(fallback: (String, Vec<String>)) -> NarrativeTurn {
+    NarrativeTurn {
+        narrative: fallback.0,
+        choices: fallback.1,
+        source: NarrativeSource::Fallback,
     }
 }

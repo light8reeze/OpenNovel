@@ -7,9 +7,11 @@ use std::{
 };
 
 use content::ContentBundle;
-use domain::{initial_state, GameState, TurnResult};
+use domain::{debug_log, initial_state, GameState, TurnResult};
 use engine::resolve_text_action;
-use narrative::{opening_narrative_with_gemini, render_turn_with_gemini, GeminiConfig};
+use narrative::{
+    opening_narrative_with_gemini, render_turn_with_gemini, GeminiConfig, NarrativeTurn,
+};
 
 #[derive(Clone)]
 struct SessionRecord {
@@ -42,11 +44,25 @@ impl GameSessionService {
         let state = initial_state();
         let content = self.content()?;
         let gemini = build_gemini_config(options);
-        let (narrative, choices) =
-            opening_narrative_with_gemini(&state, &content, gemini.as_ref()).await;
+        debug_log(
+            "session_started",
+            &[
+                ("session_id", session_id.clone()),
+                ("llm_enabled", gemini.is_some().to_string()),
+                (
+                    "gemini_model",
+                    gemini
+                        .as_ref()
+                        .map(|config| config.model.clone())
+                        .unwrap_or_else(|| "-".to_string()),
+                ),
+            ],
+        );
+        let generated = opening_narrative_with_gemini(&state, &content, gemini.as_ref()).await;
+        log_narrative(&session_id, &generated);
         let turn = TurnResult {
-            narrative,
-            choices,
+            narrative: generated.narrative,
+            choices: generated.choices,
             state: state.clone(),
             engine_result: domain::EngineResult {
                 success: true,
@@ -74,6 +90,13 @@ impl GameSessionService {
 
     pub async fn apply_input(&self, session_id: &str, input: &str) -> Result<TurnResult, String> {
         let content = self.content()?;
+        debug_log(
+            "user_input",
+            &[
+                ("session_id", session_id.to_string()),
+                ("raw_input", input.to_string()),
+            ],
+        );
         let session = {
             let sessions = self
                 .sessions
@@ -87,16 +110,17 @@ impl GameSessionService {
         let state = session.state;
 
         let resolution = resolve_text_action(&state, &content, input);
-        let (narrative, choices) = render_turn_with_gemini(
+        let generated = render_turn_with_gemini(
             &resolution.next_state,
             &resolution.engine_result,
             &content,
             session.gemini.as_ref(),
         )
         .await;
+        log_narrative(session_id, &generated);
         let turn = TurnResult {
-            narrative,
-            choices,
+            narrative: generated.narrative,
+            choices: generated.choices,
             state: resolution.next_state.clone(),
             engine_result: resolution.engine_result,
         };
@@ -168,6 +192,18 @@ fn build_gemini_config(options: StartOptions) -> Option<GeminiConfig> {
         .filter(|value| !value.is_empty())
         .unwrap_or_else(|| "models/gemini-2.5-flash".to_string());
     Some(GeminiConfig { api_key, model })
+}
+
+fn log_narrative(session_id: &str, generated: &NarrativeTurn) {
+    debug_log(
+        "narrative_generated",
+        &[
+            ("session_id", session_id.to_string()),
+            ("source", format!("{:?}", generated.source)),
+            ("choices", generated.choices.join(" | ")),
+            ("narrative", generated.narrative.clone()),
+        ],
+    );
 }
 
 #[cfg(test)]
