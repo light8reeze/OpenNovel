@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::env;
 
 use serde::{Deserialize, Serialize};
 
@@ -157,6 +158,39 @@ impl GameState {
         self.player.flags.iter().any(|value| value == flag)
             || self.world.global_flags.iter().any(|value| value == flag)
     }
+}
+
+pub fn debug_enabled() -> bool {
+    matches!(
+        env::var("NOVEL_GG_DEBUG").ok().as_deref(),
+        Some("1") | Some("true") | Some("TRUE") | Some("yes") | Some("YES")
+    )
+}
+
+pub fn debug_log(event: &str, fields: &[(&str, String)]) {
+    if !debug_enabled() {
+        return;
+    }
+
+    let mut line = format!("[debug] event={}", event);
+    for (key, value) in fields {
+        line.push(' ');
+        line.push_str(key);
+        line.push('=');
+        line.push('"');
+        line.push_str(&sanitize_log_value(value));
+        line.push('"');
+    }
+    eprintln!("{}", line);
+}
+
+fn sanitize_log_value(value: &str) -> String {
+    let mut sanitized = value.replace('\n', "\\n");
+    if sanitized.len() > 240 {
+        sanitized.truncate(237);
+        sanitized.push_str("...");
+    }
+    sanitized
 }
 
 #[cfg(test)]

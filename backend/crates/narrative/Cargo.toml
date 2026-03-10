@@ -7,3 +7,5 @@ version.workspace = true
 [dependencies]
 content = { path = "../content" }
 domain = { path = "../domain" }
+serde.workspace = true
+serde_json.workspace = true

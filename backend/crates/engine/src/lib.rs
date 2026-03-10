@@ -1,5 +1,5 @@
 use content::ContentBundle;
-use domain::{Action, ActionType, EngineResult, Event, GameState};
+use domain::{debug_log, Action, ActionType, EngineResult, Event, GameState};
 
 #[derive(Debug, Clone)]
 pub struct Resolution {
@@ -13,6 +13,19 @@ pub fn resolve_text_action(state: &GameState, content: &ContentBundle, input: &s
     let action = parse_action(input);
     let (events, engine_result) = resolve_action(state, content, &action);
     let next_state = apply_events(state.clone(), &events);
+    debug_log(
+        "normalized_action",
+        &[
+            ("turn", state.meta.turn.to_string()),
+            ("action_type", format!("{:?}", action.action_type)),
+            (
+                "target",
+                action.target.clone().unwrap_or_else(|| "-".to_string()),
+            ),
+            ("raw_input", action.raw_input.clone()),
+            ("message_code", engine_result.message_code.clone()),
+        ],
+    );
     Resolution {
         action,
         events,
@@ -36,7 +49,12 @@ pub fn apply_events(mut state: GameState, events: &[Event]) -> GameState {
                 }
             }
             Event::AddGlobalFlag(flag) => {
-                if !state.world.global_flags.iter().any(|existing| existing == flag) {
+                if !state
+                    .world
+                    .global_flags
+                    .iter()
+                    .any(|existing| existing == flag)
+                {
                     state.world.global_flags.push(flag.clone());
                 }
             }
@@ -135,7 +153,14 @@ fn resolve_move(
         None => {
             return (
                 Vec::new(),
-                result(false, "MOVE_TARGET_MISSING", false, false, None, vec!["move_target_missing"]),
+                result(
+                    false,
+                    "MOVE_TARGET_MISSING",
+                    false,
+                    false,
+                    None,
+                    vec!["move_target_missing"],
+                ),
             )
         }
     };
@@ -152,19 +177,16 @@ fn resolve_move(
         .iter()
         .find(|location| location.id == state.player.location_id);
     if let Some(current) = current {
-        if current.connections.iter().any(|connection| connection == mapped_target) {
+        if current
+            .connections
+            .iter()
+            .any(|connection| connection == mapped_target)
+        {
             return (
                 vec![Event::MovePlayer {
                     location_id: mapped_target.to_string(),
                 }],
-                result(
-                    true,
-                    "MOVE_OK",
-                    true,
-                    false,
-                    None,
-                    vec![mapped_target],
-                ),
+                result(true, "MOVE_OK", true, false, None, vec![mapped_target]),
             );
         }
     }
@@ -237,7 +259,14 @@ fn resolve_talk(state: &GameState) -> (Vec<Event>, EngineResult) {
             } else {
                 (
                     Vec::new(),
-                    result(false, "NO_USEFUL_DIALOGUE", false, false, None, vec!["innkeeper"]),
+                    result(
+                        false,
+                        "NO_USEFUL_DIALOGUE",
+                        false,
+                        false,
+                        None,
+                        vec!["innkeeper"],
+                    ),
                 )
             }
         }
@@ -322,7 +351,14 @@ fn resolve_investigate(state: &GameState) -> (Vec<Event>, EngineResult) {
         ),
         _ => (
             Vec::new(),
-            result(false, "NOTHING_FOUND", false, false, None, vec!["empty_search"]),
+            result(
+                false,
+                "NOTHING_FOUND",
+                false,
+                false,
+                None,
+                vec!["empty_search"],
+            ),
         ),
     }
 }
@@ -336,7 +372,14 @@ fn resolve_use_item(state: &GameState, target: Option<&str>) -> (Vec<Event>, Eng
     } else {
         (
             Vec::new(),
-            result(false, "ITEM_NOT_AVAILABLE", false, false, None, vec!["missing_item"]),
+            result(
+                false,
+                "ITEM_NOT_AVAILABLE",
+                false,
+                false,
+                None,
+                vec!["missing_item"],
+            ),
         )
     }
 }
@@ -363,7 +406,14 @@ fn resolve_flee(state: &GameState) -> (Vec<Event>, EngineResult) {
     } else {
         (
             Vec::new(),
-            result(false, "FLEE_TOO_EARLY", false, false, None, vec!["flee_blocked"]),
+            result(
+                false,
+                "FLEE_TOO_EARLY",
+                false,
+                false,
+                None,
+                vec!["flee_blocked"],
+            ),
         )
     }
 }
