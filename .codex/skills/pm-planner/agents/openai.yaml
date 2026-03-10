@@ -1,0 +1,4 @@
+interface:
+  display_name: "PM Planner"
+  short_description: "Break feature requests into tasks and plans"
+  default_prompt: "Use $pm-planner to turn this feature request into scoped tasks, milestones, and delivery risks."
