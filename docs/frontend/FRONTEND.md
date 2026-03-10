@@ -52,6 +52,17 @@ Chat Rendering: React Markdown
 Networking: Fetch / Axios
 ```
 
+현재 구현 선택
+
+```
+Plain HTML + CSS + Vanilla JavaScript
+```
+
+설명
+
+* 현재는 backend가 정적 파일을 직접 서빙한다.
+* React / Next.js 구조는 아직 도입되지 않았다.
+
 선택 이유
 
 * React 기반 채팅 UI 구현 용이
@@ -85,6 +96,15 @@ frontend/
 │
 └─ types/
    └─ gameTypes
+```
+
+현재 구현된 실제 구조
+
+```
+frontend/
+  index.html
+  app.js
+  styles.css
 ```
 
 ---
@@ -151,6 +171,12 @@ type ChatMessage = {
 > 문을 열고 방 안을 조사한다
 ```
 
+현재 구현 추가 사항
+
+* 헤더에 Gemini API Key 입력 필드가 존재한다.
+* 새 세션 시작 시 API 키를 backend `POST /game/start`로 전달한다.
+* 입력한 키는 브라우저 `localStorage`에 저장된다.
+
 ---
 
 ## StoryView
@@ -214,6 +240,39 @@ POST /game/action
 GET  /game/state
 ```
 
+현재 구현 세부
+
+### `POST /game/start`
+
+요청 body는 비어 있을 수도 있고, 다음 필드를 포함할 수도 있다.
+
+```json
+{
+  "geminiApiKey": "AIza...",
+  "geminiModel": "gemini-2.5-flash"
+}
+```
+
+### `POST /game/action`
+
+현재 frontend는 자유 입력과 choice 버튼 둘 다 같은 API에 전달한다.
+
+```json
+{
+  "sessionId": "...",
+  "inputText": "주변을 조사한다"
+}
+```
+
+또는
+
+```json
+{
+  "sessionId": "...",
+  "choiceText": "창고로 이동한다"
+}
+```
+
 ---
 
 ## Start Game
@@ -227,7 +286,9 @@ Response
 ```
 {
   sessionId,
-  initialStory
+  narrative,
+  choices,
+  state
 }
 ```
 
@@ -244,7 +305,7 @@ Request
 ```
 {
   sessionId,
-  action: "open the door"
+  inputText: "open the door"
 }
 ```
 
@@ -252,8 +313,10 @@ Response
 
 ```
 {
-  story,
-  updatedState
+  narrative,
+  choices,
+  engineResult,
+  state
 }
 ```
 
@@ -271,6 +334,19 @@ Response
 5 Response returned
 6 UI updates
 ```
+
+현재 frontend 동작
+
+* 최초 로드 시 `localStorage`의 `sessionId`를 확인한다.
+* 세션이 있으면 `GET /game/state`로 상태를 복원한다.
+* 세션이 없으면 새 세션을 시작한다.
+* 선택지 버튼 또는 직접 입력을 `POST /game/action`으로 전송한다.
+* 응답의 `narrative`, `choices`, `state`로 화면을 갱신한다.
+
+주의
+
+* 현재 message history 전체를 서버에서 복구하지는 않는다.
+* 새로고침 시 상태 패널은 복원되지만, 전체 스토리 로그는 재생성되지 않는다.
 
 ---
 

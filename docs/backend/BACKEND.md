@@ -68,6 +68,33 @@ Player Input → Game Engine → World State Update → LLM Narrative → Respon
 +------------------------------------------------+
 ```
 
+## 현재 구현된 구조
+
+현재 backend는 문서상의 추상 구조보다 단순한 Rust workspace 형태로 구현되어 있다.
+
+```
+backend/
+  Cargo.toml
+  crates/
+    api/
+    content/
+    domain/
+    engine/
+    narrative/
+    session/
+    storage/
+```
+
+각 crate의 현재 책임은 다음과 같다.
+
+* `domain`: `GameState`, `Action`, `Event`, `EngineResult`, `TurnResult` 정의
+* `content`: `content/` 디렉터리의 JSON 로드 및 검증
+* `engine`: 입력 해석, 이벤트 생성, 상태 전이, 퀘스트 진행
+* `narrative`: 템플릿 narrative 생성, Gemini API 호출, JSON 파싱, 폴백
+* `session`: 세션 단위 오케스트레이션과 메모리 저장
+* `api`: axum 기반 HTTP 엔드포인트와 정적 frontend 서빙
+* `storage`: 향후 영속 저장소용 placeholder trait
+
 ---
 
 # 3. Technology Stack
@@ -82,6 +109,12 @@ Player Input → Game Engine → World State Update → LLM Narrative → Respon
 Go or Rust
 ```
 
+현재 구현 선택
+
+```
+Rust
+```
+
 이유
 
 * lightweight backend
@@ -93,6 +126,12 @@ Go or Rust
 
 ```
 REST + WebSocket
+```
+
+현재 구현 선택
+
+```
+REST only
 ```
 
 WebSocket 사용 이유
@@ -110,6 +149,13 @@ MVP
 PostgreSQL
 or
 SQLite
+```
+
+현재 구현 상태
+
+```
+아직 미구현
+현재는 in-memory session store 사용
 ```
 
 데이터 종류
@@ -183,6 +229,8 @@ pkg/
 
 scripts/
 ```
+
+현재 구현된 실제 구조는 상단의 `현재 구현된 구조` 섹션을 따른다.
 
 ---
 
@@ -279,6 +327,15 @@ State Update
 Narrative Generation
 ```
 
+현재 구현에서는 `engine::resolve_text_action`이 다음을 수행한다.
+
+* 텍스트 입력을 최소 규칙 기반 `Action`으로 정규화
+* `Event` 목록 생성
+* `apply_events`로 `next_state` 계산
+* `EngineResult` 반환
+
+즉 Intent Parsing 전용 LLM 없이도 전체 루프가 동작한다.
+
 ---
 
 # 7. LLM Narrative Engine
@@ -314,6 +371,26 @@ Player Action:
 
 Narrate the outcome in immersive storytelling style.
 ```
+
+## 현재 구현 상태
+
+현재 narrative 계층은 두 가지 경로를 가진다.
+
+1. 기본 템플릿 narrative
+2. Gemini API 기반 narrative JSON 생성
+
+Gemini 연동 방식
+
+* `POST /game/start` 요청에서 `geminiApiKey`와 선택적 `geminiModel`을 받을 수 있다.
+* 세션이 시작될 때 API 키를 세션 설정에 저장한다.
+* 이후 turn마다 `state`와 `engineResult` 기반 prompt를 만들어 Gemini를 호출한다.
+* Gemini 응답은 반드시 JSON으로 파싱한다.
+* 호출 실패 또는 파싱 실패 시 템플릿 narrative로 폴백한다.
+
+중요:
+
+* Gemini는 `narrative`와 `choices`만 생성한다.
+* 상태 전이, 퀘스트 진행, 판정은 전부 `engine`이 수행한다.
 
 ---
 
@@ -377,6 +454,73 @@ response
 GET /session/{id}
 ```
 
+## 현재 구현된 API
+
+현재 실제 구현 엔드포인트는 다음과 같다.
+
+### `POST /game/start`
+
+request body (optional)
+
+```json
+{
+  "geminiApiKey": "AIza...",
+  "geminiModel": "gemini-2.5-flash"
+}
+```
+
+response
+
+```json
+{
+  "sessionId": "...",
+  "narrative": "...",
+  "choices": ["..."],
+  "state": { }
+}
+```
+
+### `POST /game/action`
+
+request
+
+```json
+{
+  "sessionId": "...",
+  "inputText": "주변을 조사한다"
+}
+```
+
+또는
+
+```json
+{
+  "sessionId": "...",
+  "choiceText": "창고로 이동한다"
+}
+```
+
+response
+
+```json
+{
+  "narrative": "...",
+  "choices": ["..."],
+  "engineResult": { },
+  "state": { }
+}
+```
+
+### `GET /game/state?sessionId=...`
+
+response
+
+```json
+{
+  "state": { }
+}
+```
+
 ---
 
 # 9. State Persistence
@@ -437,6 +581,14 @@ interface
 ```
 GenerateNarrative(context) -> text
 ```
+
+현재 구현은 provider abstraction 대신 Gemini 전용 최소 연동을 먼저 넣은 상태다.
+
+향후 정리 방향
+
+* provider trait 분리
+* Gemini/OpenAI 등 provider 교체 가능 구조화
+* intent / narrative / memory summary 분리
 
 ---
 
