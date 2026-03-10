@@ -82,6 +82,7 @@ For each task:
   - `content`
   - `prompt`
   - `qa`
+  - `agent`
 - Write `feature-name` in lowercase kebab-case.
 - Example scopes:
   - `backend/session-store`
