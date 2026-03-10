@@ -1,10 +1,10 @@
 # AGENTS.md
 
-AI Novel Player Backend — Codex Development Guide
+OpenNovel Backend — Codex Development Guide
 
 ## 1. Project Overview
 
-이 프로젝트는 **AI 기반 인터랙티브 소설 플레이 서비스**이다.
+이 프로젝트는 **OpenNovel**, AI 기반 인터랙티브 소설 플레이 서비스이다.
 
 플레이어는 채팅 인터페이스를 통해 소설 속 주인공이 되어 행동을 선택하며,
 LLM은 게임 마스터(GM) 역할을 수행하여 세계 상태와 스토리를 생성한다.
@@ -34,7 +34,6 @@ Player Input → Game Engine → World State Update → LLM Narrative → Respon
    * 저장 / 로딩
 
 ---
-
 # 2. Backend Architecture
 
 ## High-Level Architecture

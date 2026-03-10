@@ -1,12 +1,12 @@
 # FRONTEND.md
 
-AI Novel Player – Frontend Development Guide
+OpenNovel – Frontend Development Guide
 
 ---
 
 # 1. 프로젝트 개요
 
-AI Novel Player는 **플레이어가 소설 속 주인공이 되어 이야기를 진행하는 텍스트 기반 게임 서비스**이다.
+OpenNovel은 **플레이어가 소설 속 주인공이 되어 이야기를 진행하는 텍스트 기반 게임 서비스**이다.
 
 사용자는 채팅 인터페이스를 통해 행동을 입력하고, AI는 스토리 진행 및 세계 상태를 기반으로 다음 장면을 생성한다.
 
@@ -38,7 +38,6 @@ User Input → Backend API → Game Engine → LLM → Story Response → UI
 * 실시간 동기화
 
 ---
-
 # 3. 프론트엔드 기술 스택
 
 추천 스택

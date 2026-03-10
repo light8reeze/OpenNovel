@@ -1,5 +1,5 @@
 {
-  "name": "novel-gg",
+  "name": "open-novel",
   "private": true,
   "scripts": {
     "start:app": "./scripts/start-app.sh",

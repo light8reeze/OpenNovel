@@ -6,8 +6,17 @@ const inputEl = document.getElementById("input");
 const geminiKeyEl = document.getElementById("gemini-key");
 const startButton = document.getElementById("start-button");
 
-let sessionId = localStorage.getItem("novel-gg-session");
-geminiKeyEl.value = localStorage.getItem("novel-gg-gemini-key") || "";
+const SESSION_KEY = "open-novel-session";
+const LEGACY_SESSION_KEY = "novel-gg-session";
+const GEMINI_KEY_STORAGE = "open-novel-gemini-key";
+const LEGACY_GEMINI_KEY_STORAGE = "novel-gg-gemini-key";
+
+let sessionId =
+  localStorage.getItem(SESSION_KEY) || localStorage.getItem(LEGACY_SESSION_KEY);
+geminiKeyEl.value =
+  localStorage.getItem(GEMINI_KEY_STORAGE) ||
+  localStorage.getItem(LEGACY_GEMINI_KEY_STORAGE) ||
+  "";
 
 function appendMessage(role, content) {
   const item = document.createElement("article");
@@ -44,9 +53,9 @@ function renderState(state) {
 async function startGame() {
   const geminiApiKey = geminiKeyEl.value.trim();
   if (geminiApiKey) {
-    localStorage.setItem("novel-gg-gemini-key", geminiApiKey);
+    localStorage.setItem(GEMINI_KEY_STORAGE, geminiApiKey);
   } else {
-    localStorage.removeItem("novel-gg-gemini-key");
+    localStorage.removeItem(GEMINI_KEY_STORAGE);
   }
 
   const response = await fetch("/game/start", {
@@ -58,7 +67,7 @@ async function startGame() {
   });
   const data = await response.json();
   sessionId = data.sessionId;
-  localStorage.setItem("novel-gg-session", sessionId);
+  localStorage.setItem(SESSION_KEY, sessionId);
   logEl.innerHTML = "";
   appendMessage("ai", data.narrative);
   renderChoices(data.choices);
@@ -73,7 +82,7 @@ async function restoreState() {
     `/game/state?sessionId=${encodeURIComponent(sessionId)}`,
   );
   if (!response.ok) {
-    localStorage.removeItem("novel-gg-session");
+    localStorage.removeItem(SESSION_KEY);
     sessionId = null;
     return;
   }
