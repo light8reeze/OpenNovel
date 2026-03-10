@@ -54,6 +54,27 @@ LLM은 **표현 계층(Narrative Layer)** 이다.
 
 @docs/frontend/FRONTEND.md 문서를 참고한다.
 
+### 현재 구현 상태
+
+현재 저장소에는 다음이 구현되어 있다.
+
+* Rust workspace 기반 backend
+* `POST /game/start`, `POST /game/action`, `GET /game/state` API
+* 메모리 기반 세션 관리
+* deterministic core game engine
+* 정적 JSON 콘텐츠 로더
+* 기본 템플릿 narrative 생성기
+* 선택적 Gemini 기반 narrative 생성
+* 단일 서버에서 정적 frontend 서빙
+
+아직 미구현 또는 placeholder 상태인 항목은 다음과 같다.
+
+* SQLite 기반 영속 저장소
+* 본격적인 Intent Parsing LLM 파이프라인
+* Memory Summary 파이프라인
+* React/TypeScript 기반 frontend
+* 실시간 스트리밍 응답
+
 ---
 
 # 3. 핵심 원칙
@@ -323,6 +344,23 @@ choices
 - 피 묻은 천 조각을 발견했다
 - 창고 근처에서 수상한 흔적을 발견했다
 ```
+
+---
+
+# 12.4 현재 구현된 LLM 연동 방식
+
+현재 구현에서는 LLM이 **narrative / choices 생성에만** 연결되어 있다.
+
+* 세션 시작 시 `geminiApiKey`를 입력받을 수 있다.
+* API 키가 있으면 Gemini API를 사용해 narrative JSON 생성을 시도한다.
+* 실패하면 서버 내부 템플릿 narrative로 폴백한다.
+* 엔진 판정과 상태 전이는 항상 backend engine이 수행한다.
+
+즉 현재도 다음 원칙은 유지된다.
+
+* LLM은 상태를 바꾸지 않는다.
+* LLM은 성공/실패 판정을 하지 않는다.
+* `state`, `engineResult`가 진실이다.
 
 ---
 
