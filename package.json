@@ -4,6 +4,7 @@
   "scripts": {
     "start:app": "./scripts/start-app.sh",
     "start:debug": "./scripts/start-debug.sh",
+    "stop:app": "./scripts/stop-app.sh",
     "backend:demo": "cargo run --manifest-path backend/Cargo.toml -p api -- --demo",
     "backend:serve": "cargo run --manifest-path backend/Cargo.toml -p api"
   }

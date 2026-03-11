@@ -9,8 +9,8 @@ use std::{
 
 use content::ContentBundle;
 use domain::{
-    debug_log, initial_state, Action, GameState, IntentValidationRequest, IntentValidationResponse,
-    NarrativeRequest, NarrativeResponse, SceneContext, TurnResult,
+    append_json_log, debug_log, initial_state, Action, GameState, IntentValidationRequest,
+    IntentValidationResponse, NarrativeRequest, NarrativeResponse, SceneContext, TurnResult,
 };
 use engine::{
     allowed_actions_for_state, heuristic_parse_action, resolve_action_input,
@@ -271,6 +271,14 @@ impl GameSessionService {
         base_url: &str,
         request: &IntentValidationRequest,
     ) -> Result<IntentValidationResponse, String> {
+        append_json_log(
+            "agent-calls.jsonl",
+            &serde_json::json!({
+                "endpoint": format!("{}/intent/validate", base_url),
+                "kind": "intent_request",
+                "request": request,
+            }),
+        );
         let response = self
             .http_client
             .post(format!("{}/intent/validate", base_url))
@@ -282,10 +290,19 @@ impl GameSessionService {
         if !status.is_success() {
             return Err(format!("intent request returned {}", status));
         }
-        response
+        let parsed = response
             .json::<IntentValidationResponse>()
             .await
-            .map_err(|error| format!("intent response parse failed: {}", error))
+            .map_err(|error| format!("intent response parse failed: {}", error))?;
+        append_json_log(
+            "agent-calls.jsonl",
+            &serde_json::json!({
+                "endpoint": format!("{}/intent/validate", base_url),
+                "kind": "intent_response",
+                "response": &parsed,
+            }),
+        );
+        Ok(parsed)
     }
 
     async fn request_narrative(
@@ -295,6 +312,15 @@ impl GameSessionService {
         request: &NarrativeRequest,
         fallback: NarrativeTurn,
     ) -> NarrativeTurn {
+        append_json_log(
+            "agent-calls.jsonl",
+            &serde_json::json!({
+                "endpoint": format!("{}/narrative/{}", base_url, kind),
+                "kind": "narrative_request",
+                "request_type": kind,
+                "request": request,
+            }),
+        );
         let response = self
             .http_client
             .post(format!("{}/narrative/{}", base_url, kind))
@@ -303,17 +329,63 @@ impl GameSessionService {
             .await;
 
         let Ok(response) = response else {
+            append_json_log(
+                "agent-calls.jsonl",
+                &serde_json::json!({
+                    "endpoint": format!("{}/narrative/{}", base_url, kind),
+                    "kind": "narrative_fallback",
+                    "request_type": kind,
+                    "reason": "http_request_failed",
+                }),
+            );
             return fallback;
         };
         if !response.status().is_success() {
+            append_json_log(
+                "agent-calls.jsonl",
+                &serde_json::json!({
+                    "endpoint": format!("{}/narrative/{}", base_url, kind),
+                    "kind": "narrative_fallback",
+                    "request_type": kind,
+                    "reason": format!("http_status_{}", response.status()),
+                }),
+            );
             return fallback;
         }
         let Ok(parsed) = response.json::<NarrativeResponse>().await else {
+            append_json_log(
+                "agent-calls.jsonl",
+                &serde_json::json!({
+                    "endpoint": format!("{}/narrative/{}", base_url, kind),
+                    "kind": "narrative_fallback",
+                    "request_type": kind,
+                    "reason": "response_parse_failed",
+                }),
+            );
             return fallback;
         };
         if !is_valid_narrative_response(&parsed, &request.allowed_choices) {
+            append_json_log(
+                "agent-calls.jsonl",
+                &serde_json::json!({
+                    "endpoint": format!("{}/narrative/{}", base_url, kind),
+                    "kind": "narrative_fallback",
+                    "request_type": kind,
+                    "reason": "invalid_narrative_response",
+                    "response": &parsed,
+                }),
+            );
             return fallback;
         }
+        append_json_log(
+            "agent-calls.jsonl",
+            &serde_json::json!({
+                "endpoint": format!("{}/narrative/{}", base_url, kind),
+                "kind": "narrative_response",
+                "request_type": kind,
+                "response": &parsed,
+            }),
+        );
 
         NarrativeTurn {
             narrative: parsed.narrative,

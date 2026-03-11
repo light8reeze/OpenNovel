@@ -7,6 +7,7 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use domain::append_json_log;
 use serde::{Deserialize, Serialize};
 use session::{GameSessionService, StartOptions};
 
@@ -15,7 +16,7 @@ struct AppState {
     service: Arc<GameSessionService>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 struct ActionRequest {
     #[serde(rename = "sessionId")]
     session_id: String,
@@ -25,7 +26,7 @@ struct ActionRequest {
     choice_text: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 struct StateQuery {
     #[serde(rename = "sessionId")]
     session_id: String,
@@ -40,7 +41,7 @@ struct StartResponse {
     state: domain::GameState,
 }
 
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Deserialize, Default, Serialize)]
 struct StartRequest {
     #[serde(rename = "geminiApiKey")]
     gemini_api_key: Option<String>,
@@ -122,6 +123,16 @@ async fn start_game(
     payload: Option<Json<StartRequest>>,
 ) -> Result<Json<StartResponse>, ApiError> {
     let payload = payload.map(|value| value.0).unwrap_or_default();
+    append_json_log(
+        "api-requests.jsonl",
+        &serde_json::json!({
+            "endpoint": "/game/start",
+            "request": {
+                "geminiConfigured": payload.gemini_api_key.as_ref().map(|value| !value.is_empty()).unwrap_or(false),
+                "geminiModel": payload.gemini_model.clone(),
+            }
+        }),
+    );
     let api_key = payload
         .gemini_api_key
         .or_else(|| env::var("GEMINI_API_KEY").ok());
@@ -136,18 +147,33 @@ async fn start_game(
         })
         .await
         .map_err(ApiError::internal)?;
-    Ok(Json(StartResponse {
+    let response = StartResponse {
         session_id,
         narrative: turn.narrative,
         choices: turn.choices,
         state: turn.state,
-    }))
+    };
+    append_json_log(
+        "api-responses.jsonl",
+        &serde_json::json!({
+            "endpoint": "/game/start",
+            "response": &response,
+        }),
+    );
+    Ok(Json(response))
 }
 
 async fn apply_action(
     State(state): State<AppState>,
     Json(payload): Json<ActionRequest>,
 ) -> Result<Json<ActionResponse>, ApiError> {
+    append_json_log(
+        "api-requests.jsonl",
+        &serde_json::json!({
+            "endpoint": "/game/action",
+            "request": &payload,
+        }),
+    );
     let input = match (&payload.input_text, &payload.choice_text) {
         (Some(_), Some(_)) => {
             return Err(ApiError::bad_request(
@@ -168,23 +194,46 @@ async fn apply_action(
         .apply_input(&payload.session_id, input)
         .await
         .map_err(ApiError::from_session)?;
-    Ok(Json(ActionResponse {
+    let response = ActionResponse {
         narrative: turn.narrative,
         choices: turn.choices,
         engine_result: turn.engine_result,
         state: turn.state,
-    }))
+    };
+    append_json_log(
+        "api-responses.jsonl",
+        &serde_json::json!({
+            "endpoint": "/game/action",
+            "response": &response,
+        }),
+    );
+    Ok(Json(response))
 }
 
 async fn get_state(
     State(state): State<AppState>,
     Query(query): Query<StateQuery>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
+    append_json_log(
+        "api-requests.jsonl",
+        &serde_json::json!({
+            "endpoint": "/game/state",
+            "request": &query,
+        }),
+    );
     let game_state = state
         .service
         .get_state(&query.session_id)
         .map_err(ApiError::from_session)?;
-    Ok(Json(serde_json::json!({ "state": game_state })))
+    let response = serde_json::json!({ "state": game_state });
+    append_json_log(
+        "api-responses.jsonl",
+        &serde_json::json!({
+            "endpoint": "/game/state",
+            "response": response,
+        }),
+    );
+    Ok(Json(response))
 }
 
 struct ApiError {
