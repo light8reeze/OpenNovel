@@ -1,0 +1,26 @@
+[
+  {
+    "id": "narrator-location-square",
+    "role": "narrator",
+    "text": "village_square는 축축한 밤공기와 닫힌 상점, 사람들의 불안이 느껴지는 광장으로 묘사한다.",
+    "location_id": "village_square",
+    "visibility": "player",
+    "tags": ["tone", "location"]
+  },
+  {
+    "id": "narrator-location-warehouse",
+    "role": "narrator",
+    "text": "village_warehouse는 습기, 낡은 목재, 감춰진 흔적, 쇠 냄새 같은 감각으로 묘사한다.",
+    "location_id": "village_warehouse",
+    "visibility": "player",
+    "tags": ["tone", "location", "warehouse"]
+  },
+  {
+    "id": "narrator-location-alley",
+    "role": "narrator",
+    "text": "dark_alley는 진흙, 불빛이 닿지 않는 벽, 급히 남겨진 흔적 같은 긴장감을 준다.",
+    "location_id": "dark_alley",
+    "visibility": "player",
+    "tags": ["tone", "location", "alley"]
+  }
+]

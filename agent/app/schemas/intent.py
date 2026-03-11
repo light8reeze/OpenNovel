@@ -15,3 +15,7 @@ class IntentValidationResponse(BaseModel):
     confidence: float
     validation_flags: list[str] = Field(default_factory=list)
     source: str
+    provider: str = ""
+    model: str = ""
+    retrieval_used: bool = False
+    retrieved_document_ids: list[str] = Field(default_factory=list)

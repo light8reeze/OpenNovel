@@ -1,6 +1,12 @@
 # OpenNovel Agent
 
-`agent`는 OpenNovel backend와 분리된 Python + LangGraph 서비스다.
+`agent`는 OpenNovel backend와 분리된 Python 서비스다.
+
+현재 구조:
+
+- `IntenderAgent`: 플레이어 입력을 action type으로 정규화
+- `NarratorAgent`: engine result를 narrative/choices로 표현
+- `Chroma`: role별 retrieval 문서 저장소
 
 현재 포함 범위:
 
@@ -9,7 +15,7 @@
 - `POST /narrative/turn`
 - `GET /health`
 
-지원 provider:
+role별 지원 provider:
 
 - `mock`
 - `openai`
@@ -28,27 +34,34 @@
 uvicorn app.main:app --reload --app-dir agent
 ```
 
-환경 변수:
+권장 실행:
 
 ```bash
-export AGENT_LLM_PROVIDER=openai
-export AGENT_LLM_MODEL=gpt-4.1-mini
-export AGENT_LLM_API_KEY=...
+PYTHONPATH=agent uvicorn app.main:app --reload --app-dir agent
 ```
 
-OpenAI 호환 provider를 붙일 때는 다음처럼 base URL을 바꾼다.
+환경 변수는 role별로 분리된다.
 
 ```bash
-export AGENT_LLM_PROVIDER=openai_compatible
-export AGENT_LLM_BASE_URL=https://your-provider.example/v1
-export AGENT_LLM_MODEL=your-model-name
-export AGENT_LLM_API_KEY=...
+export AGENT_VECTOR_DB_PROVIDER=chroma
+export AGENT_VECTOR_DB_PATH=.chroma
+
+export AGENT_INTENDER_PROVIDER=openai
+export AGENT_INTENDER_MODEL=gpt-4.1-mini
+export AGENT_INTENDER_API_KEY=...
+
+export AGENT_NARRATOR_PROVIDER=gemini
+export AGENT_NARRATOR_MODEL=gemini-2.5-flash
+export AGENT_NARRATOR_API_KEY=...
 ```
 
-Gemini를 붙일 때는 다음처럼 설정한다.
+OpenAI 호환 provider를 role별로 붙일 수도 있다.
 
 ```bash
-export AGENT_LLM_PROVIDER=gemini
-export AGENT_LLM_MODEL=gemini-2.5-flash
-export AGENT_LLM_API_KEY=...
+export AGENT_INTENDER_PROVIDER=openai_compatible
+export AGENT_INTENDER_BASE_URL=https://your-provider.example/v1
+export AGENT_INTENDER_MODEL=your-model-name
+export AGENT_INTENDER_API_KEY=...
 ```
+
+Chroma는 startup 시 `agent/content/intender_docs`, `agent/content/narrator_docs`를 자동 인덱싱한다.

@@ -7,7 +7,7 @@ from typing import Any
 import httpx
 from pydantic import BaseModel
 
-from app.config import Settings
+from app.config import RoleModelSettings
 
 
 class LlmError(RuntimeError):
@@ -33,7 +33,7 @@ class BaseLlmClient:
 
 
 class MockLlmClient(BaseLlmClient):
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: RoleModelSettings):
         self.settings = settings
 
     def generate_json(
@@ -47,11 +47,11 @@ class MockLlmClient(BaseLlmClient):
 
 
 class OpenAICompatibleClient(BaseLlmClient):
-    def __init__(self, settings: Settings):
-        if not settings.llm_api_key:
-            raise LlmError("missing AGENT_LLM_API_KEY/OPENAI_API_KEY")
+    def __init__(self, settings: RoleModelSettings):
+        if not settings.api_key:
+            raise LlmError("missing role API key")
         self.settings = settings
-        self.base_url = (settings.llm_base_url or "https://api.openai.com/v1").rstrip("/")
+        self.base_url = (settings.base_url or "https://api.openai.com/v1").rstrip("/")
 
     def generate_json(
         self,
@@ -62,7 +62,7 @@ class OpenAICompatibleClient(BaseLlmClient):
     ) -> LlmJsonResult:
         schema = schema_model.model_json_schema()
         payload = {
-            "model": self.settings.llm_model,
+            "model": self.settings.model,
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
@@ -78,11 +78,11 @@ class OpenAICompatibleClient(BaseLlmClient):
         response_json = _post_json(
             f"{self.base_url}/chat/completions",
             headers={
-                "Authorization": f"Bearer {self.settings.llm_api_key}",
+                "Authorization": f"Bearer {self.settings.api_key}",
                 "Content-Type": "application/json",
             },
             payload=payload,
-            timeout_seconds=self.settings.llm_timeout_seconds,
+            timeout_seconds=self.settings.timeout_seconds,
         )
         try:
             content = response_json["choices"][0]["message"]["content"]
@@ -96,17 +96,17 @@ class OpenAICompatibleClient(BaseLlmClient):
 
         return LlmJsonResult(
             payload=parsed,
-            provider=self.settings.llm_provider,
-            model=self.settings.llm_model,
+            provider=self.settings.provider,
+            model=self.settings.model,
         )
 
 
 class GeminiClient(BaseLlmClient):
-    def __init__(self, settings: Settings):
-        if not settings.llm_api_key:
-            raise LlmError("missing AGENT_LLM_API_KEY/GEMINI_API_KEY")
+    def __init__(self, settings: RoleModelSettings):
+        if not settings.api_key:
+            raise LlmError("missing role API key")
         self.settings = settings
-        self.base_url = (settings.llm_base_url or "https://generativelanguage.googleapis.com/v1beta").rstrip("/")
+        self.base_url = (settings.base_url or "https://generativelanguage.googleapis.com/v1beta").rstrip("/")
 
     def generate_json(
         self,
@@ -130,13 +130,13 @@ class GeminiClient(BaseLlmClient):
             },
         }
         response_json = _post_json(
-            f"{self.base_url}/models/{self.settings.llm_model}:generateContent",
+            f"{self.base_url}/models/{self.settings.model}:generateContent",
             headers={
-                "x-goog-api-key": self.settings.llm_api_key,
+                "x-goog-api-key": self.settings.api_key,
                 "Content-Type": "application/json",
             },
             payload=payload,
-            timeout_seconds=self.settings.llm_timeout_seconds,
+            timeout_seconds=self.settings.timeout_seconds,
         )
         try:
             text = response_json["candidates"][0]["content"]["parts"][0]["text"]
@@ -150,19 +150,19 @@ class GeminiClient(BaseLlmClient):
 
         return LlmJsonResult(
             payload=parsed,
-            provider=self.settings.llm_provider,
-            model=self.settings.llm_model,
+            provider=self.settings.provider,
+            model=self.settings.model,
         )
 
 
-def build_llm_client(settings: Settings) -> BaseLlmClient:
-    if settings.llm_provider == "mock":
+def build_llm_client(settings: RoleModelSettings) -> BaseLlmClient:
+    if settings.provider == "mock":
         return MockLlmClient(settings)
-    if settings.llm_provider in {"openai", "openai_compatible"}:
+    if settings.provider in {"openai", "openai_compatible"}:
         return OpenAICompatibleClient(settings)
-    if settings.llm_provider == "gemini":
+    if settings.provider == "gemini":
         return GeminiClient(settings)
-    raise LlmError(f"unsupported provider: {settings.llm_provider}")
+    raise LlmError(f"unsupported provider: {settings.provider}")
 
 
 def _post_json(

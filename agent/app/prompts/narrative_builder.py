@@ -1,9 +1,15 @@
 from app.schemas.narrative import NarrativeRequest
+from app.retrieval.schemas import RetrievalContext
 
 from app.prompts.system_rules import SYSTEM_RULES
 
 
-def build_narrative_prompts(kind: str, request: NarrativeRequest) -> tuple[str, str]:
+def build_narrative_prompts(
+    kind: str,
+    request: NarrativeRequest,
+    retrieval: RetrievalContext,
+) -> tuple[str, str]:
+    retrieval_block = retrieval.as_prompt_block() or "-"
     system_prompt = SYSTEM_RULES + """
 너의 역할은 engine이 확정한 결과를 바탕으로 장면 묘사와 선택지를 JSON으로 출력하는 것이다.
 출력 형식:
@@ -41,6 +47,9 @@ Scene Context:
 - npcs_in_scene: {", ".join(request.scene_context.npcs_in_scene) or "-"}
 - visible_targets: {", ".join(request.scene_context.visible_targets) or "-"}
 
+retrieval context:
+{retrieval_block}
+
 {outcome_block}
 
 Allowed choices:
@@ -51,5 +60,6 @@ Allowed choices:
 - 한국어로 응답하라.
 - 분위기는 dark fantasy mystery이되 과장된 시적 표현은 피한다.
 - choice는 2개 이상 4개 이하로 유지한다.
+- retrieval context는 장면/말투 참고용이며 입력 상태를 덮어쓰면 안 된다.
 """
     return system_prompt, user_prompt

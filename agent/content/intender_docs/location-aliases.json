@@ -1,0 +1,24 @@
+[
+  {
+    "id": "intender-location-warehouse",
+    "role": "intender",
+    "text": "창고, warehouse, 물자 창고는 village_warehouse 주변 이동 의도로 자주 연결된다.",
+    "location_id": "village_square",
+    "visibility": "player",
+    "tags": ["move", "warehouse", "alias"]
+  },
+  {
+    "id": "intender-location-alley",
+    "role": "intender",
+    "text": "골목, alley는 dark_alley 이동 의도를 뜻한다.",
+    "visibility": "player",
+    "tags": ["move", "alley", "alias"]
+  },
+  {
+    "id": "intender-location-tavern",
+    "role": "intender",
+    "text": "여관, tavern, inn은 crooked_tavern 이동 의도를 뜻한다.",
+    "visibility": "player",
+    "tags": ["move", "tavern", "alias"]
+  }
+]

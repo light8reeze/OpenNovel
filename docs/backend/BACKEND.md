@@ -94,6 +94,13 @@ backend/
 * `api`: axum 기반 HTTP 엔드포인트와 정적 frontend 서빙
 * `storage`: 향후 영속 저장소용 placeholder trait
 
+현재는 외부 Python agent를 연결할 수 있으며, agent 내부는 다음 두 역할로 분리되는 방향을 따른다.
+
+* `IntenderAgent`: 플레이어 입력을 action type으로 검증/정규화
+* `NarratorAgent`: engine result를 narrative JSON으로 생성
+
+backend는 여전히 최종 action 유효성 검증과 state transition을 소유한다.
+
 ---
 
 # 3. Technology Stack

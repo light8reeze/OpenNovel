@@ -11,7 +11,9 @@ def test_health() -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["status"] == "ok"
-    assert payload["provider"] == "mock"
+    assert payload["intender"]["provider"] == "mock"
+    assert payload["narrator"]["provider"] == "mock"
+    assert payload["vectorStore"]["provider"] == "chroma"
 
 
 def test_intent_validation_returns_action() -> None:
@@ -36,7 +38,9 @@ def test_intent_validation_returns_action() -> None:
         },
     )
     assert response.status_code == 200
-    assert response.json()["action"]["action_type"] == "MOVE"
+    payload = response.json()
+    assert payload["action"]["action_type"] == "MOVE"
+    assert isinstance(payload["retrieved_document_ids"], list)
 
 
 def test_turn_narrative_returns_allowed_choices() -> None:
@@ -72,4 +76,6 @@ def test_turn_narrative_returns_allowed_choices() -> None:
         },
     )
     assert response.status_code == 200
-    assert len(response.json()["choices"]) >= 2
+    payload = response.json()
+    assert len(payload["choices"]) >= 2
+    assert isinstance(payload["retrieved_document_ids"], list)

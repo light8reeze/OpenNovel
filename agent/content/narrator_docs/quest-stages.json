@@ -1,0 +1,22 @@
+[
+  {
+    "id": "narrator-quest-blood-mark",
+    "role": "narrator",
+    "text": "초반 조사 단계에서는 살인 사건의 공포보다 불길한 흔적의 발견을 앞세운다.",
+    "quest_id": "murder_case",
+    "stage_min": 0,
+    "stage_max": 2,
+    "visibility": "player",
+    "tags": ["quest", "early", "tone"]
+  },
+  {
+    "id": "narrator-quest-reveal",
+    "role": "narrator",
+    "text": "후반 단계에서는 흩어진 단서가 하나로 모이는 긴장과 확신을 강조한다.",
+    "quest_id": "murder_case",
+    "stage_min": 4,
+    "stage_max": 6,
+    "visibility": "player",
+    "tags": ["quest", "late", "tone"]
+  }
+]
