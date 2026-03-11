@@ -30,8 +30,13 @@ Cargo.lock
 # Coverage / test outputs
 coverage/
 .nyc_output/
+.pytest_cache/
 
 # Local caches
 .cache/
+.mypy_cache/
 .tmp/
 tmp/
+.venv/
+__pycache__/
+*.py[cod]

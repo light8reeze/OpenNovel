@@ -102,7 +102,10 @@ async fn index() -> Html<&'static str> {
 
 async fn frontend_script() -> impl IntoResponse {
     (
-        [(axum::http::header::CONTENT_TYPE, "application/javascript; charset=utf-8")],
+        [(
+            axum::http::header::CONTENT_TYPE,
+            "application/javascript; charset=utf-8",
+        )],
         include_str!("../../../../frontend/app.js"),
     )
 }
@@ -153,7 +156,11 @@ async fn apply_action(
         }
         (Some(input), None) => input,
         (None, Some(choice)) => choice,
-        (None, None) => return Err(ApiError::bad_request("one of inputText or choiceText is required")),
+        (None, None) => {
+            return Err(ApiError::bad_request(
+                "one of inputText or choiceText is required",
+            ))
+        }
     };
 
     let turn = state

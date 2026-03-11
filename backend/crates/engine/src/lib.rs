@@ -10,7 +10,14 @@ pub struct Resolution {
 }
 
 pub fn resolve_text_action(state: &GameState, content: &ContentBundle, input: &str) -> Resolution {
-    let action = parse_action(input);
+    resolve_action_input(state, content, heuristic_parse_action(input))
+}
+
+pub fn resolve_action_input(
+    state: &GameState,
+    content: &ContentBundle,
+    action: Action,
+) -> Resolution {
     let (events, engine_result) = resolve_action(state, content, &action);
     let next_state = apply_events(state.clone(), &events);
     debug_log(
@@ -32,6 +39,45 @@ pub fn resolve_text_action(state: &GameState, content: &ContentBundle, input: &s
         next_state,
         engine_result,
     }
+}
+
+pub fn heuristic_parse_action(input: &str) -> Action {
+    parse_action(input)
+}
+
+pub fn allowed_actions_for_state(state: &GameState) -> Vec<ActionType> {
+    let mut actions = vec![ActionType::Investigate, ActionType::Move];
+    match state.player.location_id.as_str() {
+        "village_square" | "village_warehouse" | "crooked_tavern" => {
+            actions.push(ActionType::Talk);
+        }
+        _ => {}
+    }
+    if state.player.inventory.get("torch").copied().unwrap_or(0) > 0 {
+        actions.push(ActionType::UseItem);
+    }
+    if state.player.location_id == "dark_alley" || state.quests.murder_case.stage >= 4 {
+        actions.push(ActionType::Flee);
+    }
+    actions.push(ActionType::Rest);
+    actions
+}
+
+pub fn visible_targets_for_state(state: &GameState) -> Vec<String> {
+    let mut targets: Vec<String> = match state.player.location_id.as_str() {
+        "village_square" => vec!["warehouse", "aria", "village_square"],
+        "village_warehouse" => vec!["aria", "village_square"],
+        "dark_alley" => vec!["tavern", "dark_alley"],
+        "crooked_tavern" => vec!["aria", "innkeeper", "village_square"],
+        _ => vec!["village_square"],
+    }
+    .into_iter()
+    .map(str::to_string)
+    .collect();
+    if state.player.inventory.get("torch").copied().unwrap_or(0) > 0 {
+        targets.push("torch".to_string());
+    }
+    targets
 }
 
 pub fn apply_events(mut state: GameState, events: &[Event]) -> GameState {

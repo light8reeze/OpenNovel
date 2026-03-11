@@ -70,6 +70,13 @@ pub struct Action {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SceneContext {
+    pub location_name: String,
+    pub npcs_in_scene: Vec<String>,
+    pub visible_targets: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "kind", content = "value")]
 pub enum Event {
     HpDelta(i32),
@@ -102,6 +109,39 @@ pub struct StateSummary {
     pub player_flags: Vec<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct IntentValidationRequest {
+    pub player_input: String,
+    pub allowed_actions: Vec<ActionType>,
+    pub state_summary: StateSummary,
+    pub scene_context: SceneContext,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct IntentValidationResponse {
+    pub action: Action,
+    pub confidence: f32,
+    pub validation_flags: Vec<String>,
+    pub source: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct NarrativeRequest {
+    pub state_summary: StateSummary,
+    pub scene_context: SceneContext,
+    pub engine_result: Option<EngineResult>,
+    pub allowed_choices: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct NarrativeResponse {
+    pub narrative: String,
+    pub choices: Vec<String>,
+    pub source: String,
+    pub used_fallback: bool,
+    pub safety_flags: Vec<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TurnResult {
     pub narrative: String,
@@ -122,7 +162,10 @@ pub fn initial_state() -> GameState {
     npc_affinity.insert("innkeeper".to_string(), 0);
 
     GameState {
-        meta: MetaState { turn: 0, seed: 12345 },
+        meta: MetaState {
+            turn: 0,
+            seed: 12345,
+        },
         player: PlayerState {
             hp: 100,
             gold: 20,

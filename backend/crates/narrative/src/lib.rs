@@ -54,6 +54,7 @@ struct NarrativeJson {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NarrativeSource {
+    ExternalAgent,
     Gemini,
     Fallback,
 }
@@ -217,7 +218,10 @@ pub fn choices_for_state(state: &GameState) -> Vec<String> {
             "주변을 조사한다".to_string(),
             "광장으로 이동한다".to_string(),
         ],
-        _ => vec!["주변을 조사한다".to_string(), "광장으로 이동한다".to_string()],
+        _ => vec![
+            "주변을 조사한다".to_string(),
+            "광장으로 이동한다".to_string(),
+        ],
     }
 }
 
@@ -317,8 +321,12 @@ fn parse_narrative_json(raw: &str) -> Result<NarrativeJson, String> {
         return Ok(parsed);
     }
 
-    let start = trimmed.find('{').ok_or_else(|| "no json object start".to_string())?;
-    let end = trimmed.rfind('}').ok_or_else(|| "no json object end".to_string())?;
+    let start = trimmed
+        .find('{')
+        .ok_or_else(|| "no json object start".to_string())?;
+    let end = trimmed
+        .rfind('}')
+        .ok_or_else(|| "no json object end".to_string())?;
     serde_json::from_str(&trimmed[start..=end]).map_err(|error| error.to_string())
 }
 
