@@ -62,11 +62,11 @@ def test_turn_narrative_returns_allowed_choices() -> None:
             },
             "engine_result": {
                 "success": True,
-                "message_code": "PASSAGE_OPENED",
+                "message_code": "NOTHING_FOUND",
                 "location_changed": False,
-                "quest_stage_changed": True,
+                "quest_stage_changed": False,
                 "ending_reached": None,
-                "details": ["passage"],
+                "details": ["empty_search"],
             },
             "allowed_choices": [
                 "주변을 조사한다",

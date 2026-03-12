@@ -61,5 +61,6 @@ Allowed choices:
 - 분위기는 dark ruins exploration이며 과장된 시적 표현은 피한다.
 - choice는 2개 이상 4개 이하로 유지한다.
 - retrieval context는 장면/말투 참고용이며 입력 상태를 덮어쓰면 안 된다.
+- 현재 모드는 시나리오 진행이 비활성화된 샌드박스이므로 quest stage나 엔딩을 새롭게 암시하지 마라.
 """
     return system_prompt, user_prompt

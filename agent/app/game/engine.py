@@ -48,8 +48,7 @@ def allowed_actions_for_state(state: GameState) -> list[ActionType]:
         actions.append(ActionType.TALK)
     if state.player.inventory.get("torch", 0) > 0:
         actions.append(ActionType.USE_ITEM)
-    if state.quests.sunken_ruins.stage >= 2:
-        actions.append(ActionType.FLEE)
+    actions.append(ActionType.FLEE)
     actions.append(ActionType.REST)
     return actions
 
@@ -148,49 +147,12 @@ def _resolve_move(state: GameState, content: ContentBundle, target: str | None) 
 
 def _resolve_talk(state: GameState) -> tuple[list[Event], EngineResult]:
     if state.player.location_id == "ruins_entrance":
-        if not state.has_flag("met_caretaker"):
-            return [
-                Event("add_player_flag", "met_caretaker"),
-                Event("affinity_delta", {"npc_id": "caretaker", "delta": 2}),
-            ], _result(True, "CARETAKER_BRIEFING", False, False, None, ["caretaker"])
-        return [], _result(True, "CARETAKER_WARNING", False, False, None, ["caretaker"])
+        return [], _result(True, "NO_USEFUL_DIALOGUE", False, False, None, ["caretaker"])
     return [], _result(False, "NO_NPC_TO_TALK", False, False, None, ["no_npc"])
 
 
 def _resolve_investigate(state: GameState) -> tuple[list[Event], EngineResult]:
-    stage = state.quests.sunken_ruins.stage
-    if state.player.location_id == "ruins_entrance" and stage == 0:
-        return [
-            Event("add_player_flag", "found_rune"),
-            Event("quest_stage_set", {"quest_id": "sunken_ruins", "stage": 1}),
-        ], _result(True, "RUNE_FOUND", False, True, None, ["rune"])
-    if state.player.location_id == "collapsed_hall" and stage <= 1:
-        return [
-            Event("add_player_flag", "opened_passage"),
-            Event("quest_stage_set", {"quest_id": "sunken_ruins", "stage": 2}),
-        ], _result(True, "PASSAGE_OPENED", False, True, None, ["passage"])
-    if state.player.location_id == "trap_chamber" and stage <= 2:
-        return [
-            Event("add_player_flag", "trap_pattern_known"),
-            Event("quest_stage_set", {"quest_id": "sunken_ruins", "stage": 3}),
-        ], _result(True, "TRAP_REVEALED", False, True, None, ["trap_pattern"])
-    if state.player.location_id == "buried_sanctum" and stage == 3:
-        return [
-            Event("add_player_flag", "seal_broken"),
-            Event("quest_stage_set", {"quest_id": "sunken_ruins", "stage": 4}),
-        ], _result(True, "SEAL_BROKEN", False, True, None, ["seal"])
-    if state.player.location_id == "buried_sanctum" and stage == 4:
-        return [
-            Event("add_player_flag", "took_relic"),
-            Event("quest_stage_set", {"quest_id": "sunken_ruins", "stage": 5}),
-            Event("gold_delta", 35),
-        ], _result(True, "RELIC_SECURED", False, True, None, ["relic"])
-    if state.player.location_id == "ruins_entrance" and stage >= 5 and state.has_flag("took_relic"):
-        return [
-            Event("add_player_flag", "returned_with_relic"),
-            Event("quest_stage_set", {"quest_id": "sunken_ruins", "stage": 6}),
-        ], _result(True, "RELIC_RECOVERED", False, True, "relic_recovered", ["ending_good"])
-    return [], _result(False, "NOTHING_FOUND", False, False, None, ["empty_search"])
+    return [], _result(True, "NOTHING_FOUND", False, False, None, ["empty_search"])
 
 
 def _resolve_use_item(state: GameState, target: str | None) -> tuple[list[Event], EngineResult]:
@@ -200,17 +162,7 @@ def _resolve_use_item(state: GameState, target: str | None) -> tuple[list[Event]
 
 
 def _resolve_flee(state: GameState) -> tuple[list[Event], EngineResult]:
-    if state.player.location_id == "buried_sanctum" and state.quests.sunken_ruins.stage >= 4 and not state.has_flag("took_relic"):
-        return [
-            Event("add_player_flag", "curse_marked"),
-            Event("quest_stage_set", {"quest_id": "sunken_ruins", "stage": 99}),
-        ], _result(True, "CURSE_TRIGGERED", False, True, "greed_awakened", ["ending_curse"])
-    if state.quests.sunken_ruins.stage >= 2:
-        return [
-            Event("add_player_flag", "retreated_alive"),
-            Event("quest_stage_set", {"quest_id": "sunken_ruins", "stage": 99}),
-        ], _result(True, "RETREAT_END", False, True, "retreated_alive", ["ending_retreat"])
-    return [], _result(False, "FLEE_TOO_EARLY", False, False, None, ["flee_blocked"])
+    return [], _result(True, "RETREAT_IGNORED", False, False, None, ["retreat_ignored"])
 
 
 def _result(

@@ -32,7 +32,7 @@ class RetrievalService:
             for hit in raw_hits
             if self._matches_visibility(hit.metadata, "player")
             and self._matches_location(hit.metadata, request.state_summary.location_id)
-            and self._matches_stage(hit.metadata, request.state_summary.sunken_ruins_stage)
+            and not self._is_quest_stage_doc(hit.metadata)
         ]
         return RetrievalContext(used=bool(filtered), query=query, hits=filtered[: self.settings.vector_store.top_k])
 
@@ -68,3 +68,9 @@ class RetrievalService:
     def _matches_visibility(self, metadata: dict[str, object], visibility: str) -> bool:
         candidate = metadata.get("visibility")
         return candidate in (None, "", visibility)
+
+    def _is_quest_stage_doc(self, metadata: dict[str, object]) -> bool:
+        tags = metadata.get("tags")
+        if isinstance(tags, list):
+            return "quest" in tags
+        return False

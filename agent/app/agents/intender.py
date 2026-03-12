@@ -8,6 +8,7 @@ from app.retrieval.schemas import RetrievalContext
 from app.retrieval.search import RetrievalService
 from app.schemas.common import Action, ActionType
 from app.schemas.intent import IntentValidationRequest, IntentValidationResponse
+from app.services.file_logger import log_llm_error
 from app.services.llm_client import BaseLlmClient, LlmError
 
 
@@ -38,6 +39,18 @@ class IntenderAgent:
                 }
             )
         except (LlmError, ValidationError) as error:
+            log_llm_error(
+                role="intender",
+                provider=self.settings.provider,
+                model=self.settings.model,
+                stage="fallback",
+                error=str(error),
+                extra={
+                    "player_input": request.player_input,
+                    "retrieval_used": context.used,
+                    "retrieved_document_ids": context.document_ids,
+                },
+            )
             response = self._fallback(request, context, str(error))
         return self._validate(response, request)
 
