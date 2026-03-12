@@ -1,22 +1,22 @@
 # Backend Debug Logging
 
-개발 중 디버그 로그는 환경변수 `NOVEL_GG_DEBUG=1`로 활성화한다.
+현재 backend는 Python `agent` 단일 서비스다. 별도의 Rust debug 플래그는 없다.
 
 예시
 
 ```bash
-NOVEL_GG_DEBUG=1 npm run start:app
+npm run start:debug
 ```
 
-현재 출력되는 핵심 로그
+현재 확인하는 핵심 로그
 
-* `user_input`: 사용자의 원본 입력
-* `normalized_action`: 엔진이 해석한 `ActionType`, target, message code
-* `gemini_narrative_request`: Gemini narrative 요청 시작
-* `gemini_narrative_fallback`: Gemini 실패 후 fallback 전환
-* `narrative_generated`: 최종 narrative, choices, source(`Gemini` 또는 `Fallback`)
+* `log/agent.debug.<run-id>.log`: uvicorn process 로그
+* `log/agent/backend-requests.jsonl`: HTTP 요청 로그
+* `log/agent/intent-results.jsonl`: intent 결과 로그
+* `log/agent/narrative-results.jsonl`: narrative 결과 로그
+* `log/agent/game-results.jsonl`: `/game/*` 응답 로그
 
 주의
 
-* Gemini API key 자체는 로그에 출력하지 않는다.
-* narrative 텍스트는 길이 제한 후 출력된다.
+* API key 원문은 로그에 남기지 않는 것을 원칙으로 한다.
+* JSONL 로그는 append 방식이므로 디버깅 시 run id와 timestamp를 함께 본다.

@@ -81,21 +81,6 @@ agent/
   tests/
 ```
 
-현재 Rust workspace는 reference implementation으로 저장소에 남아 있다.
-
-```
-backend/
-  Cargo.toml
-  crates/
-    api/
-    content/
-    domain/
-    engine/
-    narrative/
-    session/
-    storage/
-```
-
 현재 `agent/app`의 주요 책임은 다음과 같다.
 
 * `game/models.py`: `GameState`, `Event`, `TurnResult`, API request/response 모델 정의
@@ -107,16 +92,6 @@ backend/
 * `api/routes.py`: FastAPI 엔드포인트와 정적 frontend 서빙
 
 클래스 기준 상세 아키텍처는 `docs/backend/AGENT_ARCHITECTURE.md`를 참고한다.
-
-Rust `backend/`의 주요 crate 책임은 reference parity와 회귀 검증 관점에서 유지된다.
-
-* `domain`: 원본 `GameState`, `Action`, `Event`, `EngineResult`, `TurnResult` 정의
-* `content`: 원본 JSON 로드 및 검증
-* `engine`: 원본 deterministic rule implementation
-* `narrative`: 원본 템플릿/Gemini narrative 구현
-* `session`: 원본 세션 오케스트레이션
-* `api`: 원본 axum 서버
-* `storage`: placeholder trait
 
 ---
 
@@ -135,7 +110,7 @@ Go or Rust
 현재 구현 선택
 
 ```
-Python (official runtime) + Rust (reference backend)
+Python
 ```
 
 이유
@@ -210,50 +185,7 @@ LLM prompt cache
 
 # 4. Project Structure
 
-예상 디렉토리 구조
-
-```
-backend/
-
-cmd/
-    server/
-
-internal/
-
-    api/
-        handlers
-        router
-
-    engine/
-        game_engine
-        rule_engine
-        state_machine
-
-    narrative/
-        prompt_builder
-        llm_adapter
-
-    session/
-        session_manager
-
-    model/
-        player
-        world
-        story
-
-    repository/
-        database
-
-    config/
-        env
-
-pkg/
-    utils
-
-scripts/
-```
-
-현재 구현된 실제 구조는 상단의 `현재 구현된 구조` 섹션을 따른다.
+현재 구현된 실제 구조는 상단의 `현재 구현된 구조` 섹션을 따른다. 문서상의 추상 구조보다 현재 `agent/app` 패키지 구조가 실제 동작 기준이다.
 
 ---
 
