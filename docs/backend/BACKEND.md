@@ -1,5 +1,3 @@
-# AGENTS.md
-
 OpenNovel Backend — Codex Development Guide
 
 ## 1. Project Overview
@@ -44,32 +42,46 @@ Player Input → Game Engine → World State Update → LLM Narrative → Respon
                 |  (Chat Interface)|
                 +--------+---------+
                          |
+                       REST
                          |
-                REST / WebSocket
-                         |
-+------------------------------------------------+
-|                Backend API                     |
-|                                                |
-|  +-------------+    +----------------------+   |
-|  | Session     |    | Game Engine          |   |
-|  | Manager     |--->| State Transition     |   |
-|  +-------------+    +----------------------+   |
-|          |                    |                |
-|          |                    v                |
-|          |           +-------------------+     |
-|          |           | Narrative Engine  |     |
-|          |           | (LLM Adapter)     |     |
-|          |           +-------------------+     |
-|          |                    |                |
-|          v                    v                |
-|      Persistence        Prompt Builder         |
-|      (DB / Storage)                            |
-+------------------------------------------------+
++--------------------------------------------------+
+|              Agent FastAPI Service               |
+|                                                  |
+|  +------------------+   +----------------------+ |
+|  | Game Session     |-->| Deterministic Engine | |
+|  | Service          |   | State Transition     | |
+|  +------------------+   +----------------------+ |
+|           |                         |            |
+|           |                         v            |
+|           |              +--------------------+ |
+|           |              | IntenderAgent      | |
+|           |              | NarratorAgent      | |
+|           |              +--------------------+ |
+|           |                         |            |
+|           v                         v            |
+|      In-memory store         Prompt / Retrieval |
+|      Static frontend         LLM adapters       |
++--------------------------------------------------+
 ```
 
 ## 현재 구현된 구조
 
-현재 backend는 문서상의 추상 구조보다 단순한 Rust workspace 형태로 구현되어 있다.
+현재 공식 backend 런타임은 Python `agent` 서비스다.
+
+```
+agent/
+  app/
+    api/
+    agents/
+    game/
+    prompts/
+    retrieval/
+    schemas/
+    services/
+  tests/
+```
+
+현재 Rust workspace는 reference implementation으로 저장소에 남아 있다.
 
 ```
 backend/
@@ -84,22 +96,27 @@ backend/
     storage/
 ```
 
-각 crate의 현재 책임은 다음과 같다.
+현재 `agent/app`의 주요 책임은 다음과 같다.
 
-* `domain`: `GameState`, `Action`, `Event`, `EngineResult`, `TurnResult` 정의
-* `content`: `content/` 디렉터리의 JSON 로드 및 검증
-* `engine`: 입력 해석, 이벤트 생성, 상태 전이, 퀘스트 진행
-* `narrative`: 템플릿 narrative 생성, Gemini API 호출, JSON 파싱, 폴백
-* `session`: 세션 단위 오케스트레이션과 메모리 저장
-* `api`: axum 기반 HTTP 엔드포인트와 정적 frontend 서빙
-* `storage`: 향후 영속 저장소용 placeholder trait
+* `game/models.py`: `GameState`, `Event`, `TurnResult`, API request/response 모델 정의
+* `game/engine.py`: 입력 해석, 허용 액션 계산, 이벤트 생성, 상태 전이, 선택지 계산
+* `game/service.py`: 세션 오케스트레이션, in-memory 저장, `/game/*` 흐름 제어
+* `agents/intender.py`: 플레이어 입력을 action candidate로 정규화
+* `agents/narrator.py`: engine result를 narrative JSON으로 생성
+* `services/fallback_renderer.py`: 템플릿 narrative 폴백
+* `api/routes.py`: FastAPI 엔드포인트와 정적 frontend 서빙
 
-현재는 외부 Python agent를 연결할 수 있으며, agent 내부는 다음 두 역할로 분리되는 방향을 따른다.
+클래스 기준 상세 아키텍처는 `docs/backend/AGENT_ARCHITECTURE.md`를 참고한다.
 
-* `IntenderAgent`: 플레이어 입력을 action type으로 검증/정규화
-* `NarratorAgent`: engine result를 narrative JSON으로 생성
+Rust `backend/`의 주요 crate 책임은 reference parity와 회귀 검증 관점에서 유지된다.
 
-backend는 여전히 최종 action 유효성 검증과 state transition을 소유한다.
+* `domain`: 원본 `GameState`, `Action`, `Event`, `EngineResult`, `TurnResult` 정의
+* `content`: 원본 JSON 로드 및 검증
+* `engine`: 원본 deterministic rule implementation
+* `narrative`: 원본 템플릿/Gemini narrative 구현
+* `session`: 원본 세션 오케스트레이션
+* `api`: 원본 axum 서버
+* `storage`: placeholder trait
 
 ---
 
@@ -118,7 +135,7 @@ Go or Rust
 현재 구현 선택
 
 ```
-Rust
+Python (official runtime) + Rust (reference backend)
 ```
 
 이유
@@ -324,7 +341,7 @@ LLM hallucination 방지
 ```
 Player Input
      |
-Action Parser
+Intent Validation / Heuristic Parse
      |
 Rule Engine
      |
@@ -333,14 +350,15 @@ State Update
 Narrative Generation
 ```
 
-현재 구현에서는 `engine::resolve_text_action`이 다음을 수행한다.
+현재 구현에서는 `agent.app.game.engine`과 `agent.app.game.service`가 다음을 수행한다.
 
-* 텍스트 입력을 최소 규칙 기반 `Action`으로 정규화
+* `IntenderAgent`로 플레이어 입력을 action candidate로 정규화
+* validation 실패 시 heuristic parser로 fallback
 * `Event` 목록 생성
 * `apply_events`로 `next_state` 계산
 * `EngineResult` 반환
 
-즉 Intent Parsing 전용 LLM 없이도 전체 루프가 동작한다.
+즉 LLM이 실패해도 deterministic loop는 계속 동작한다.
 
 ---
 
@@ -383,14 +401,14 @@ Narrate the outcome in immersive storytelling style.
 현재 narrative 계층은 두 가지 경로를 가진다.
 
 1. 기본 템플릿 narrative
-2. Gemini API 기반 narrative JSON 생성
+2. LLM 기반 narrative JSON 생성
 
-Gemini 연동 방식
+LLM 연동 방식
 
 * `POST /game/start` 요청에서 `geminiApiKey`와 선택적 `geminiModel`을 받을 수 있다.
-* 세션이 시작될 때 API 키를 세션 설정에 저장한다.
-* 이후 turn마다 `state`와 `engineResult` 기반 prompt를 만들어 Gemini를 호출한다.
-* Gemini 응답은 반드시 JSON으로 파싱한다.
+* 세션이 시작될 때 API 키를 세션 narrator 설정에 저장한다.
+* 이후 turn마다 `state`와 `engineResult` 기반 prompt를 만들어 narrator를 호출한다.
+* Gemini 또는 기타 provider 응답은 반드시 JSON으로 파싱한다.
 * 호출 실패 또는 파싱 실패 시 템플릿 narrative로 폴백한다.
 
 중요:
@@ -402,67 +420,21 @@ Gemini 연동 방식
 
 # 8. API Design
 
-## Create Session
-
-```
-POST /session
-```
-
-response
-
-```
-{
-  session_id
-}
-```
-
----
-
-## Send Player Action
-
-```
-POST /action
-```
-
-request
-
-```
-{
-  session_id
-  action
-}
-```
-
-flow
-
-```
-action
-→ game engine
-→ state update
-→ narrative generation
-→ response
-```
-
-response
-
-```
-{
-  narrative
-  updated_state
-}
-```
-
----
-
-## Get Session State
-
-```
-GET /session/{id}
-```
-
 ## 현재 구현된 API
 
 현재 실제 구현 엔드포인트는 다음과 같다.
+
+### `GET /`
+
+정적 frontend shell을 반환한다.
+
+### `GET /frontend/app.js`
+
+정적 frontend 스크립트를 반환한다.
+
+### `GET /frontend/styles.css`
+
+정적 frontend 스타일시트를 반환한다.
 
 ### `POST /game/start`
 
@@ -526,6 +498,15 @@ response
   "state": { }
 }
 ```
+
+### 내부 보조 API
+
+다음 엔드포인트는 agent 내부 LLM 계층을 직접 검증할 때 사용한다.
+
+* `GET /health`
+* `POST /intent/validate`
+* `POST /narrative/opening`
+* `POST /narrative/turn`
 
 ---
 

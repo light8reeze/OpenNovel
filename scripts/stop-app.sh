@@ -5,7 +5,6 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOG_DIR="${ROOT_DIR}/log"
 AGENT_PID_FILE="${LOG_DIR}/agent.pid"
-BACKEND_PID_FILE="${LOG_DIR}/backend.pid"
 
 stop_pid_file() {
   local label=$1
@@ -29,4 +28,3 @@ stop_pid_file() {
 }
 
 stop_pid_file "agent" "${AGENT_PID_FILE}"
-stop_pid_file "backend" "${BACKEND_PID_FILE}"

@@ -59,7 +59,7 @@ Plain HTML + CSS + Vanilla JavaScript
 
 설명
 
-* 현재는 backend가 정적 파일을 직접 서빙한다.
+* 현재는 Python `agent` 서버가 정적 파일을 직접 서빙한다.
 * React / Next.js 구조는 아직 도입되지 않았다.
 
 선택 이유
@@ -173,7 +173,7 @@ type ChatMessage = {
 현재 구현 추가 사항
 
 * 헤더에 Gemini API Key 입력 필드가 존재한다.
-* 새 세션 시작 시 API 키를 backend `POST /game/start`로 전달한다.
+* 새 세션 시작 시 API 키를 `POST /game/start`로 전달한다.
 * 입력한 키는 브라우저 `localStorage`에 저장된다.
 
 ---
@@ -231,7 +231,7 @@ type PlayerState = {
 
 # 8. API 통신
 
-Backend API
+Game API
 
 ```
 POST /game/start
@@ -328,8 +328,8 @@ Response
 ```
 1 User enters action
 2 Frontend sends API request
-3 Backend game engine updates state
-4 LLM generates story
+3 Agent game runtime updates state
+4 Agent narrator generates story
 5 Response returned
 6 UI updates
 ```

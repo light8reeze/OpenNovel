@@ -57,19 +57,20 @@ LLM은 **표현 계층(Narrative Layer)** 이다.
 
 현재 저장소에는 다음이 구현되어 있다.
 
-* Rust workspace 기반 backend
-* `POST /game/start`, `POST /game/action`, `GET /game/state` API
+* Python `agent` 기반 단일 공식 서버
+* `GET /`, `POST /game/start`, `POST /game/action`, `GET /game/state` API
 * 메모리 기반 세션 관리
 * deterministic core game engine
-* 정적 JSON 콘텐츠 로더
-* 기본 템플릿 narrative 생성기
+* 루트 `content/` 기반 정적 JSON 콘텐츠 로더
+* LLM 기반 intent parsing / narrative 생성 agent
+* 기본 템플릿 narrative 폴백
 * 선택적 Gemini 기반 narrative 생성
 * 단일 서버에서 정적 frontend 서빙
+* Rust workspace 기반 reference backend 코드베이스
 
 아직 미구현 또는 placeholder 상태인 항목은 다음과 같다.
 
 * SQLite 기반 영속 저장소
-* 본격적인 Intent Parsing LLM 파이프라인
 * Memory Summary 파이프라인
 * React/TypeScript 기반 frontend
 * 실시간 스트리밍 응답
@@ -348,12 +349,14 @@ choices
 
 # 12.4 현재 구현된 LLM 연동 방식
 
-현재 구현에서는 LLM이 **narrative / choices 생성에만** 연결되어 있다.
+현재 구현에서는 Python `agent`가 LLM 연동의 진입점이다.
 
+* `IntenderAgent`가 플레이어 입력을 action candidate로 정규화한다.
+* `NarratorAgent`가 opening/turn narrative JSON 생성을 시도한다.
 * 세션 시작 시 `geminiApiKey`를 입력받을 수 있다.
-* API 키가 있으면 Gemini API를 사용해 narrative JSON 생성을 시도한다.
-* 실패하면 서버 내부 템플릿 narrative로 폴백한다.
-* 엔진 판정과 상태 전이는 항상 backend engine이 수행한다.
+* API 키가 있으면 해당 세션의 narrator가 Gemini API를 사용해 narrative JSON 생성을 시도한다.
+* 실패하면 agent 내부 템플릿 narrative로 폴백한다.
+* 엔진 판정과 상태 전이는 항상 deterministic game engine이 수행한다.
 
 즉 현재도 다음 원칙은 유지된다.
 

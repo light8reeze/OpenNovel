@@ -1,15 +1,22 @@
 # OpenNovel Agent
 
-`agent`는 OpenNovel backend와 분리된 Python 서비스다.
+`agent`는 OpenNovel의 공식 단일 서비스다.
 
 현재 구조:
 
 - `IntenderAgent`: 플레이어 입력을 action type으로 정규화
 - `NarratorAgent`: engine result를 narrative/choices로 표현
+- `GameSessionService`: deterministic core engine, 세션 관리, `/game/*` API
 - `Chroma`: role별 retrieval 문서 저장소
 
 현재 포함 범위:
 
+- `GET /`
+- `GET /frontend/app.js`
+- `GET /frontend/styles.css`
+- `POST /game/start`
+- `POST /game/action`
+- `GET /game/state`
 - `POST /intent/validate`
 - `POST /narrative/opening`
 - `POST /narrative/turn`
@@ -24,9 +31,11 @@ role별 지원 provider:
 
 원칙:
 
-- backend가 게임 상태와 판정을 소유한다.
-- agent는 입력 의도 검증과 narrative 표현만 담당한다.
+- agent 내부 game runtime이 게임 상태와 판정을 소유한다.
+- agent는 입력 의도 검증과 narrative 표현을 같은 서비스 안에서 호출한다.
 - agent는 상태를 변경하지 않는다.
+
+정확히는 LLM 계층이 상태를 변경하지 않는다. 상태 전이는 `GameSessionService`와 deterministic engine이 담당한다.
 
 실행 예시:
 
@@ -65,3 +74,5 @@ export AGENT_INTENDER_API_KEY=...
 ```
 
 Chroma는 startup 시 `agent/content/intender_docs`, `agent/content/narrator_docs`를 자동 인덱싱한다.
+
+게임 콘텐츠는 루트 `content/` 디렉터리에서 읽는다.

@@ -1,13 +1,27 @@
-from typing import Any
+from typing import Any, Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import FileResponse, HTMLResponse
 
+from app.game.models import ActionRequest, StartOptions, StartRequest
+from app.game.service import InvalidActionRequestError, SessionNotFoundError
 from app.runtime import get_runtime
+from app.runtime import frontend_root
 from app.schemas.intent import IntentValidationRequest, IntentValidationResponse
 from app.schemas.narrative import NarrativeRequest, NarrativeResponse
 from app.services.file_logger import log_backend_request, log_intent_result, log_narrative_result
 
 router = APIRouter()
+
+
+@router.get("/", response_class=HTMLResponse)
+def index() -> HTMLResponse:
+    return HTMLResponse((frontend_root() / "index.html").read_text(encoding="utf-8"))
+
+
+@router.get("/frontend/{asset_name}")
+def frontend_asset(asset_name: str) -> FileResponse:
+    return FileResponse(frontend_root() / asset_name)
 
 
 @router.get("/health")
@@ -40,3 +54,41 @@ def turn_narrative(payload: NarrativeRequest) -> NarrativeResponse:
     response = get_runtime().narrator.render_turn(payload)
     log_narrative_result("/narrative/turn", request_payload, response.model_dump(mode="json"))
     return response
+
+
+@router.post("/game/start")
+def start_game(payload: Optional[StartRequest] = None) -> Any:
+    request = payload or StartRequest()
+    request_payload = request.model_dump(mode="json", by_alias=True)
+    log_backend_request("/game/start", request_payload)
+    response = get_runtime().game.start_game(
+        StartOptions(
+            gemini_api_key=request.gemini_api_key,
+            gemini_model=request.gemini_model,
+        )
+    )
+    return response.model_dump(mode="json", by_alias=True)
+
+
+@router.post("/game/action")
+def apply_action(payload: ActionRequest) -> Any:
+    request_payload = payload.model_dump(mode="json", by_alias=True)
+    log_backend_request("/game/action", request_payload)
+    try:
+        response = get_runtime().game.apply_action(payload)
+    except InvalidActionRequestError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except SessionNotFoundError as error:
+        raise HTTPException(status_code=404, detail="session not found") from error
+    return response.model_dump(mode="json", by_alias=True)
+
+
+@router.get("/game/state")
+def get_state(sessionId: str) -> Any:
+    request_payload = {"sessionId": sessionId}
+    log_backend_request("/game/state", request_payload)
+    try:
+        response = get_runtime().game.get_state(sessionId)
+    except SessionNotFoundError as error:
+        raise HTTPException(status_code=404, detail="session not found") from error
+    return response.model_dump(mode="json")

@@ -5,6 +5,8 @@ from pathlib import Path
 from app.agents.intender import IntenderAgent
 from app.agents.narrator import NarratorAgent
 from app.config import Settings, load_settings
+from app.game.models import ContentBundle
+from app.game.service import GameSessionService
 from app.retrieval.indexer import index_documents
 from app.retrieval.search import RetrievalService
 from app.retrieval.vector_store import ChromaVectorStore
@@ -26,9 +28,15 @@ class AgentRuntime:
             llm_client=build_llm_client(settings.narrator),
             retrieval=self.retrieval,
         )
+        self.game = GameSessionService(
+            content=ContentBundle.load_from_disk(game_content_root()),
+            intender=self.intender,
+            default_narrator=self.narrator,
+            narrator_settings=settings.narrator,
+        )
         self.index_counts = {"intender": 0, "narrator": 0}
         if settings.vector_store.auto_index_on_startup:
-            self.index_counts = index_documents(self.store, content_root())
+            self.index_counts = index_documents(self.store, retrieval_content_root())
 
     def health(self) -> dict[str, object]:
         return {
@@ -68,3 +76,19 @@ def get_runtime() -> AgentRuntime:
 
 def content_root() -> Path:
     return Path(__file__).resolve().parents[1] / "content"
+
+
+def retrieval_content_root() -> Path:
+    return content_root()
+
+
+def repo_root() -> Path:
+    return Path(__file__).resolve().parents[2]
+
+
+def game_content_root() -> Path:
+    return repo_root() / "content"
+
+
+def frontend_root() -> Path:
+    return repo_root() / "frontend"

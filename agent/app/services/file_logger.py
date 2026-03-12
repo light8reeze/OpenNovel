@@ -15,6 +15,7 @@ COMBINED_LOG = LOG_ROOT / "combined" / f"run-{RUN_ID}.jsonl"
 REQUEST_LOG = LOG_DIR / "backend-requests.jsonl"
 INTENT_LOG = LOG_DIR / "intent-results.jsonl"
 NARRATIVE_LOG = LOG_DIR / "narrative-results.jsonl"
+GAME_LOG = LOG_DIR / "game-results.jsonl"
 
 
 def log_backend_request(endpoint: str, payload: dict[str, Any]) -> None:
@@ -55,6 +56,20 @@ def log_narrative_result(endpoint: str, request: dict[str, Any], response: dict[
         "response": response,
     }
     _append_jsonl(NARRATIVE_LOG, entry)
+    _append_jsonl(COMBINED_LOG, entry)
+
+
+def log_game_result(endpoint: str, request: dict[str, Any], response: dict[str, Any]) -> None:
+    entry = {
+        "ts": _timestamp(),
+        "ts_unix_ms": _timestamp_unix_ms(),
+        "service": "agent",
+        "kind": "game_result",
+        "endpoint": endpoint,
+        "request": request,
+        "response": response,
+    }
+    _append_jsonl(GAME_LOG, entry)
     _append_jsonl(COMBINED_LOG, entry)
 
 
