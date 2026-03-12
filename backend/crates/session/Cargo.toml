@@ -9,4 +9,6 @@ content = { path = "../content" }
 domain = { path = "../domain" }
 engine = { path = "../engine" }
 narrative = { path = "../narrative" }
+reqwest.workspace = true
+serde_json.workspace = true
 tokio.workspace = true

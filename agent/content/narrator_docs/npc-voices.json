@@ -1,0 +1,18 @@
+[
+  {
+    "id": "narrator-npc-aria",
+    "role": "narrator",
+    "text": "아리아의 대사는 짧고 조심스럽다. 단서를 볼 때 감정이 먼저 새어나오지만 과장되지는 않는다.",
+    "npc_id": "aria",
+    "visibility": "player",
+    "tags": ["npc", "voice", "aria"]
+  },
+  {
+    "id": "narrator-npc-innkeeper",
+    "role": "narrator",
+    "text": "여관 주인은 망설임이 길고, 확신 없는 진술을 조심스럽게 꺼낸다.",
+    "npc_id": "innkeeper",
+    "visibility": "player",
+    "tags": ["npc", "voice", "innkeeper"]
+  }
+]

@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    env,
     path::{Path, PathBuf},
     sync::atomic::{AtomicU64, Ordering},
     sync::{Arc, Mutex},
@@ -7,11 +8,19 @@ use std::{
 };
 
 use content::ContentBundle;
-use domain::{debug_log, initial_state, GameState, TurnResult};
-use engine::resolve_text_action;
-use narrative::{
-    opening_narrative_with_gemini, render_turn_with_gemini, GeminiConfig, NarrativeTurn,
+use domain::{
+    append_json_log, debug_log, initial_state, Action, GameState, IntentValidationRequest,
+    IntentValidationResponse, NarrativeRequest, NarrativeResponse, SceneContext, TurnResult,
 };
+use engine::{
+    allowed_actions_for_state, heuristic_parse_action, resolve_action_input,
+    visible_targets_for_state,
+};
+use narrative::{
+    choices_for_state, opening_narrative_with_gemini, render_turn_with_gemini, GeminiConfig,
+    NarrativeSource, NarrativeTurn,
+};
+use reqwest::Client;
 
 #[derive(Clone)]
 struct SessionRecord {
@@ -28,6 +37,8 @@ pub struct StartOptions {
 #[derive(Clone)]
 pub struct GameSessionService {
     content_root: PathBuf,
+    agent_base_url: Option<String>,
+    http_client: Client,
     sessions: Arc<Mutex<HashMap<String, SessionRecord>>>,
 }
 
@@ -35,6 +46,11 @@ impl GameSessionService {
     pub fn new(content_root: impl AsRef<Path>) -> Self {
         Self {
             content_root: content_root.as_ref().to_path_buf(),
+            agent_base_url: env::var("NOVEL_AGENT_BASE_URL")
+                .ok()
+                .map(|value| value.trim_end_matches('/').to_string())
+                .filter(|value| !value.is_empty()),
+            http_client: Client::new(),
             sessions: Arc::new(Mutex::new(HashMap::new())),
         }
     }
@@ -58,7 +74,9 @@ impl GameSessionService {
                 ),
             ],
         );
-        let generated = opening_narrative_with_gemini(&state, &content, gemini.as_ref()).await;
+        let generated = self
+            .generate_opening_narrative(&state, &content, gemini.as_ref())
+            .await;
         log_narrative(&session_id, &generated);
         let turn = TurnResult {
             narrative: generated.narrative,
@@ -77,13 +95,7 @@ impl GameSessionService {
         self.sessions
             .lock()
             .map_err(|_| "session lock poisoned".to_string())?
-            .insert(
-                session_id.clone(),
-                SessionRecord {
-                    state,
-                    gemini,
-                },
-            );
+            .insert(session_id.clone(), SessionRecord { state, gemini });
 
         Ok((session_id, turn))
     }
@@ -109,14 +121,16 @@ impl GameSessionService {
         };
         let state = session.state;
 
-        let resolution = resolve_text_action(&state, &content, input);
-        let generated = render_turn_with_gemini(
-            &resolution.next_state,
-            &resolution.engine_result,
-            &content,
-            session.gemini.as_ref(),
-        )
-        .await;
+        let action = self.normalize_action(&state, &content, input).await;
+        let resolution = resolve_action_input(&state, &content, action);
+        let generated = self
+            .generate_turn_narrative(
+                &resolution.next_state,
+                &resolution.engine_result,
+                &content,
+                session.gemini.as_ref(),
+            )
+            .await;
         log_narrative(session_id, &generated);
         let turn = TurnResult {
             narrative: generated.narrative,
@@ -129,12 +143,12 @@ impl GameSessionService {
             .lock()
             .map_err(|_| "session lock poisoned".to_string())?
             .insert(
-            session_id.to_string(),
-            SessionRecord {
-                state: resolution.next_state,
-                gemini: session.gemini,
-            },
-        );
+                session_id.to_string(),
+                SessionRecord {
+                    state: resolution.next_state,
+                    gemini: session.gemini,
+                },
+            );
         Ok(turn)
     }
 
@@ -168,6 +182,216 @@ impl GameSessionService {
 
     fn content(&self) -> Result<ContentBundle, String> {
         ContentBundle::load_from_disk(&self.content_root)
+    }
+
+    async fn normalize_action(
+        &self,
+        state: &GameState,
+        content: &ContentBundle,
+        input: &str,
+    ) -> Action {
+        let fallback = heuristic_parse_action(input);
+        let Some(base_url) = self.agent_base_url.as_ref() else {
+            return fallback;
+        };
+
+        let request = IntentValidationRequest {
+            player_input: input.to_string(),
+            allowed_actions: allowed_actions_for_state(state),
+            state_summary: state.summary(),
+            scene_context: scene_context(state, content),
+        };
+
+        match self.request_intent_validation(base_url, &request).await {
+            Ok(response) if is_validated_action(&response, &request) => response.action,
+            Ok(response) => {
+                debug_log(
+                    "intent_validation_rejected",
+                    &[
+                        ("source", response.source),
+                        ("flags", response.validation_flags.join("|")),
+                    ],
+                );
+                fallback
+            }
+            Err(error) => {
+                debug_log("intent_validation_fallback", &[("reason", error)]);
+                fallback
+            }
+        }
+    }
+
+    async fn generate_opening_narrative(
+        &self,
+        state: &GameState,
+        content: &ContentBundle,
+        gemini: Option<&GeminiConfig>,
+    ) -> NarrativeTurn {
+        let fallback = opening_narrative_with_gemini(state, content, gemini).await;
+        let Some(base_url) = self.agent_base_url.as_ref() else {
+            return fallback;
+        };
+
+        let request = NarrativeRequest {
+            state_summary: state.summary(),
+            scene_context: scene_context(state, content),
+            engine_result: None,
+            allowed_choices: choices_for_state(state),
+        };
+
+        self.request_narrative(base_url, "opening", &request, fallback)
+            .await
+    }
+
+    async fn generate_turn_narrative(
+        &self,
+        state: &GameState,
+        engine_result: &domain::EngineResult,
+        content: &ContentBundle,
+        gemini: Option<&GeminiConfig>,
+    ) -> NarrativeTurn {
+        let fallback = render_turn_with_gemini(state, engine_result, content, gemini).await;
+        let Some(base_url) = self.agent_base_url.as_ref() else {
+            return fallback;
+        };
+
+        let request = NarrativeRequest {
+            state_summary: state.summary(),
+            scene_context: scene_context(state, content),
+            engine_result: Some(engine_result.clone()),
+            allowed_choices: choices_for_state(state),
+        };
+
+        self.request_narrative(base_url, "turn", &request, fallback)
+            .await
+    }
+
+    async fn request_intent_validation(
+        &self,
+        base_url: &str,
+        request: &IntentValidationRequest,
+    ) -> Result<IntentValidationResponse, String> {
+        append_json_log(
+            "agent-calls.jsonl",
+            &serde_json::json!({
+                "endpoint": format!("{}/intent/validate", base_url),
+                "kind": "intent_request",
+                "request": request,
+            }),
+        );
+        let response = self
+            .http_client
+            .post(format!("{}/intent/validate", base_url))
+            .json(request)
+            .send()
+            .await
+            .map_err(|error| format!("intent request failed: {}", error))?;
+        let status = response.status();
+        if !status.is_success() {
+            return Err(format!("intent request returned {}", status));
+        }
+        let parsed = response
+            .json::<IntentValidationResponse>()
+            .await
+            .map_err(|error| format!("intent response parse failed: {}", error))?;
+        append_json_log(
+            "agent-calls.jsonl",
+            &serde_json::json!({
+                "endpoint": format!("{}/intent/validate", base_url),
+                "kind": "intent_response",
+                "response": &parsed,
+            }),
+        );
+        Ok(parsed)
+    }
+
+    async fn request_narrative(
+        &self,
+        base_url: &str,
+        kind: &str,
+        request: &NarrativeRequest,
+        fallback: NarrativeTurn,
+    ) -> NarrativeTurn {
+        append_json_log(
+            "agent-calls.jsonl",
+            &serde_json::json!({
+                "endpoint": format!("{}/narrative/{}", base_url, kind),
+                "kind": "narrative_request",
+                "request_type": kind,
+                "request": request,
+            }),
+        );
+        let response = self
+            .http_client
+            .post(format!("{}/narrative/{}", base_url, kind))
+            .json(request)
+            .send()
+            .await;
+
+        let Ok(response) = response else {
+            append_json_log(
+                "agent-calls.jsonl",
+                &serde_json::json!({
+                    "endpoint": format!("{}/narrative/{}", base_url, kind),
+                    "kind": "narrative_fallback",
+                    "request_type": kind,
+                    "reason": "http_request_failed",
+                }),
+            );
+            return fallback;
+        };
+        if !response.status().is_success() {
+            append_json_log(
+                "agent-calls.jsonl",
+                &serde_json::json!({
+                    "endpoint": format!("{}/narrative/{}", base_url, kind),
+                    "kind": "narrative_fallback",
+                    "request_type": kind,
+                    "reason": format!("http_status_{}", response.status()),
+                }),
+            );
+            return fallback;
+        }
+        let Ok(parsed) = response.json::<NarrativeResponse>().await else {
+            append_json_log(
+                "agent-calls.jsonl",
+                &serde_json::json!({
+                    "endpoint": format!("{}/narrative/{}", base_url, kind),
+                    "kind": "narrative_fallback",
+                    "request_type": kind,
+                    "reason": "response_parse_failed",
+                }),
+            );
+            return fallback;
+        };
+        if !is_valid_narrative_response(&parsed, &request.allowed_choices) {
+            append_json_log(
+                "agent-calls.jsonl",
+                &serde_json::json!({
+                    "endpoint": format!("{}/narrative/{}", base_url, kind),
+                    "kind": "narrative_fallback",
+                    "request_type": kind,
+                    "reason": "invalid_narrative_response",
+                    "response": &parsed,
+                }),
+            );
+            return fallback;
+        }
+        append_json_log(
+            "agent-calls.jsonl",
+            &serde_json::json!({
+                "endpoint": format!("{}/narrative/{}", base_url, kind),
+                "kind": "narrative_response",
+                "request_type": kind,
+                "response": &parsed,
+            }),
+        );
+
+        NarrativeTurn {
+            narrative: parsed.narrative,
+            choices: parsed.choices,
+            source: NarrativeSource::ExternalAgent,
+        }
     }
 }
 
@@ -204,6 +428,54 @@ fn log_narrative(session_id: &str, generated: &NarrativeTurn) {
             ("narrative", generated.narrative.clone()),
         ],
     );
+}
+
+fn scene_context(state: &GameState, content: &ContentBundle) -> SceneContext {
+    SceneContext {
+        location_name: content.location_name(&state.player.location_id),
+        npcs_in_scene: npcs_in_scene(state),
+        visible_targets: visible_targets_for_state(state),
+    }
+}
+
+fn npcs_in_scene(state: &GameState) -> Vec<String> {
+    match state.player.location_id.as_str() {
+        "village_square" | "village_warehouse" => vec!["aria".to_string()],
+        "crooked_tavern" => vec!["innkeeper".to_string()],
+        _ => Vec::new(),
+    }
+}
+
+fn is_validated_action(
+    response: &IntentValidationResponse,
+    request: &IntentValidationRequest,
+) -> bool {
+    if !request
+        .allowed_actions
+        .iter()
+        .any(|action| action == &response.action.action_type)
+    {
+        return false;
+    }
+
+    match response.action.target.as_deref() {
+        Some(target) => request
+            .scene_context
+            .visible_targets
+            .iter()
+            .any(|value| value == target),
+        None => true,
+    }
+}
+
+fn is_valid_narrative_response(response: &NarrativeResponse, allowed_choices: &[String]) -> bool {
+    !response.narrative.trim().is_empty()
+        && response.choices.len() >= 2
+        && response.choices.len() <= 4
+        && response
+            .choices
+            .iter()
+            .all(|choice| allowed_choices.iter().any(|allowed| allowed == choice))
 }
 
 #[cfg(test)]

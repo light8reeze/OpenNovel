@@ -48,7 +48,10 @@ impl ContentBundle {
 
         for location in &locations {
             for connection in &location.connections {
-                if !locations.iter().any(|candidate| &candidate.id == connection) {
+                if !locations
+                    .iter()
+                    .any(|candidate| &candidate.id == connection)
+                {
                     return Err(format!(
                         "location '{}' references unknown connection '{}'",
                         location.id, connection
@@ -58,7 +61,10 @@ impl ContentBundle {
         }
 
         for npc in &npcs {
-            if !locations.iter().any(|location| location.id == npc.location_id) {
+            if !locations
+                .iter()
+                .any(|location| location.id == npc.location_id)
+            {
                 return Err(format!(
                     "npc '{}' references unknown location '{}'",
                     npc.id, npc.location_id
@@ -96,8 +102,7 @@ mod tests {
 
     #[test]
     fn content_loads_from_repo_files() {
-        let bundle =
-            ContentBundle::load_from_disk(repo_content_root()).expect("content loads");
+        let bundle = ContentBundle::load_from_disk(repo_content_root()).expect("content loads");
         assert!(bundle.locations.len() >= 3);
         assert!(bundle.npcs.iter().any(|npc| npc.id == "aria"));
         assert_eq!(bundle.murder_case.id, "murder_case");

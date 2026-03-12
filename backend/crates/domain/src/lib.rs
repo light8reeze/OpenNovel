@@ -1,5 +1,11 @@
 use std::collections::BTreeMap;
-use std::env;
+use std::{
+    env,
+    fs::{self, OpenOptions},
+    io::Write,
+    path::PathBuf,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -70,6 +76,13 @@ pub struct Action {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SceneContext {
+    pub location_name: String,
+    pub npcs_in_scene: Vec<String>,
+    pub visible_targets: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "kind", content = "value")]
 pub enum Event {
     HpDelta(i32),
@@ -102,6 +115,39 @@ pub struct StateSummary {
     pub player_flags: Vec<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct IntentValidationRequest {
+    pub player_input: String,
+    pub allowed_actions: Vec<ActionType>,
+    pub state_summary: StateSummary,
+    pub scene_context: SceneContext,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct IntentValidationResponse {
+    pub action: Action,
+    pub confidence: f32,
+    pub validation_flags: Vec<String>,
+    pub source: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct NarrativeRequest {
+    pub state_summary: StateSummary,
+    pub scene_context: SceneContext,
+    pub engine_result: Option<EngineResult>,
+    pub allowed_choices: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct NarrativeResponse {
+    pub narrative: String,
+    pub choices: Vec<String>,
+    pub source: String,
+    pub used_fallback: bool,
+    pub safety_flags: Vec<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TurnResult {
     pub narrative: String,
@@ -122,7 +168,10 @@ pub fn initial_state() -> GameState {
     npc_affinity.insert("innkeeper".to_string(), 0);
 
     GameState {
-        meta: MetaState { turn: 0, seed: 12345 },
+        meta: MetaState {
+            turn: 0,
+            seed: 12345,
+        },
         player: PlayerState {
             hp: 100,
             gold: 20,
@@ -184,6 +233,26 @@ pub fn debug_log(event: &str, fields: &[(&str, String)]) {
     eprintln!("{}", line);
 }
 
+pub fn append_json_log(file_name: &str, payload: &serde_json::Value) {
+    let log_dir = backend_log_dir();
+    if fs::create_dir_all(&log_dir).is_err() {
+        return;
+    }
+
+    let mut line = payload.clone();
+    if let serde_json::Value::Object(ref mut map) = line {
+        map.entry("ts".to_string())
+            .or_insert_with(|| serde_json::Value::String(log_timestamp()));
+        map.entry("ts_unix_ms".to_string())
+            .or_insert_with(|| serde_json::Value::Number(log_timestamp_unix_ms().into()));
+        map.entry("service".to_string())
+            .or_insert_with(|| serde_json::Value::String("backend".to_string()));
+    }
+
+    append_json_line(&log_dir.join(file_name), &line);
+    append_json_line(&combined_log_path(), &line);
+}
+
 fn sanitize_log_value(value: &str) -> String {
     let mut sanitized = value.replace('\n', "\\n");
     if sanitized.len() > 240 {
@@ -191,6 +260,53 @@ fn sanitize_log_value(value: &str) -> String {
         sanitized.push_str("...");
     }
     sanitized
+}
+
+fn backend_log_dir() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .join("log")
+        .join("backend")
+}
+
+fn combined_log_path() -> PathBuf {
+    let run_id = env::var("OPENNOVEL_RUN_ID").unwrap_or_else(|_| "manual".to_string());
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .join("log")
+        .join("combined")
+        .join(format!("run-{}.jsonl", run_id))
+}
+
+fn log_timestamp() -> String {
+    let Ok(duration) = SystemTime::now().duration_since(UNIX_EPOCH) else {
+        return "0".to_string();
+    };
+    duration.as_secs().to_string()
+}
+
+fn log_timestamp_unix_ms() -> u64 {
+    let Ok(duration) = SystemTime::now().duration_since(UNIX_EPOCH) else {
+        return 0;
+    };
+    duration.as_millis() as u64
+}
+
+fn append_json_line(path: &PathBuf, payload: &serde_json::Value) {
+    if let Some(parent) = path.parent() {
+        if fs::create_dir_all(parent).is_err() {
+            return;
+        }
+    }
+
+    let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) else {
+        return;
+    };
+
+    if serde_json::to_writer(&mut file, payload).is_err() {
+        return;
+    }
+    let _ = file.write_all(b"\n");
 }
 
 #[cfg(test)]
