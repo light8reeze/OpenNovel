@@ -166,13 +166,16 @@ impl GameSessionService {
         let mut turns = vec![start];
         for input in [
             "주변을 조사한다",
-            "창고로 이동한다",
+            "회랑으로 이동한다",
             "주변을 조사한다",
-            "아리아와 대화한다",
-            "골목으로 이동한다",
+            "함정방으로 이동한다",
             "주변을 조사한다",
-            "여관으로 이동한다",
-            "아리아와 대화한다",
+            "성소로 이동한다",
+            "주변을 조사한다",
+            "주변을 조사한다",
+            "함정방으로 이동한다",
+            "회랑으로 이동한다",
+            "입구로 이동한다",
             "주변을 조사한다",
         ] {
             turns.push(self.apply_input(&session_id, input).await?);
@@ -440,8 +443,7 @@ fn scene_context(state: &GameState, content: &ContentBundle) -> SceneContext {
 
 fn npcs_in_scene(state: &GameState) -> Vec<String> {
     match state.player.location_id.as_str() {
-        "village_square" | "village_warehouse" => vec!["aria".to_string()],
-        "crooked_tavern" => vec!["innkeeper".to_string()],
+        "ruins_entrance" => vec!["caretaker".to_string()],
         _ => Vec::new(),
     }
 }
@@ -493,7 +495,7 @@ mod tests {
             .apply_input(&session_id, "주변을 조사한다")
             .await
             .expect("first turn");
-        assert_eq!(turn.state.quests.murder_case.stage, 1);
+        assert_eq!(turn.state.quests.sunken_ruins.stage, 1);
         let loaded = service.get_state(&session_id).expect("state");
         assert_eq!(loaded.meta.turn, 1);
     }

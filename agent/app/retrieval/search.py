@@ -20,7 +20,7 @@ class RetrievalService:
             hit
             for hit in raw_hits
             if self._matches_location(hit.metadata, request.state_summary.location_id)
-            and self._matches_stage(hit.metadata, request.state_summary.murder_case_stage)
+            and self._matches_stage(hit.metadata, request.state_summary.sunken_ruins_stage)
         ]
         return RetrievalContext(used=bool(filtered), query=query, hits=filtered[: self.settings.vector_store.top_k])
 
@@ -32,7 +32,7 @@ class RetrievalService:
             for hit in raw_hits
             if self._matches_visibility(hit.metadata, "player")
             and self._matches_location(hit.metadata, request.state_summary.location_id)
-            and self._matches_stage(hit.metadata, request.state_summary.murder_case_stage)
+            and self._matches_stage(hit.metadata, request.state_summary.sunken_ruins_stage)
         ]
         return RetrievalContext(used=bool(filtered), query=query, hits=filtered[: self.settings.vector_store.top_k])
 

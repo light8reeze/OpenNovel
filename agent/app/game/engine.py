@@ -21,21 +21,21 @@ def resolve_action_input(state: GameState, content: ContentBundle, action: Actio
 
 def heuristic_parse_action(input_text: str) -> Action:
     normalized = input_text.strip().lower()
-    if _contains_any(normalized, ["창고", "warehouse"]):
-        action_type, target = ActionType.MOVE, "warehouse"
-    elif _contains_any(normalized, ["골목", "alley"]):
-        action_type, target = ActionType.MOVE, "alley"
-    elif _contains_any(normalized, ["여관", "tavern", "inn"]):
-        action_type, target = ActionType.MOVE, "tavern"
-    elif _contains_any(normalized, ["광장", "square"]):
-        action_type, target = ActionType.MOVE, "village_square"
-    elif _contains_any(normalized, ["아리아", "aria", "대화", "talk"]):
-        action_type, target = ActionType.TALK, "aria"
+    if _contains_any(normalized, ["회랑", "hall"]):
+        action_type, target = ActionType.MOVE, "hall"
+    elif _contains_any(normalized, ["함정방", "함정", "trap room", "trap"]):
+        action_type, target = ActionType.MOVE, "trap_room"
+    elif _contains_any(normalized, ["성소", "제단", "sanctum", "altar"]):
+        action_type, target = ActionType.MOVE, "sanctum"
+    elif _contains_any(normalized, ["입구", "entrance"]):
+        action_type, target = ActionType.MOVE, "ruins_entrance"
+    elif _contains_any(normalized, ["관리인", "안내자", "caretaker", "대화", "talk"]):
+        action_type, target = ActionType.TALK, "caretaker"
     elif _contains_any(normalized, ["휴식", "rest"]):
         action_type, target = ActionType.REST, None
     elif _contains_any(normalized, ["횃불", "torch"]):
         action_type, target = ActionType.USE_ITEM, "torch"
-    elif _contains_any(normalized, ["도망", "flee"]):
+    elif _contains_any(normalized, ["도망", "후퇴", "retreat", "flee"]):
         action_type, target = ActionType.FLEE, None
     else:
         action_type, target = ActionType.INVESTIGATE, None
@@ -44,42 +44,42 @@ def heuristic_parse_action(input_text: str) -> Action:
 
 def allowed_actions_for_state(state: GameState) -> list[ActionType]:
     actions = [ActionType.INVESTIGATE, ActionType.MOVE]
-    if state.player.location_id in {"village_square", "village_warehouse", "crooked_tavern"}:
+    if state.player.location_id == "ruins_entrance":
         actions.append(ActionType.TALK)
     if state.player.inventory.get("torch", 0) > 0:
         actions.append(ActionType.USE_ITEM)
-    if state.player.location_id == "dark_alley" or state.quests.murder_case.stage >= 4:
+    if state.quests.sunken_ruins.stage >= 2:
         actions.append(ActionType.FLEE)
     actions.append(ActionType.REST)
     return actions
 
 
 def visible_targets_for_state(state: GameState) -> list[str]:
-    if state.player.location_id == "village_square":
-        targets = ["warehouse", "aria", "village_square"]
-    elif state.player.location_id == "village_warehouse":
-        targets = ["aria", "village_square"]
-    elif state.player.location_id == "dark_alley":
-        targets = ["tavern", "dark_alley"]
-    elif state.player.location_id == "crooked_tavern":
-        targets = ["aria", "innkeeper", "village_square"]
+    if state.player.location_id == "ruins_entrance":
+        targets = ["caretaker", "hall", "ruins_entrance"]
+    elif state.player.location_id == "collapsed_hall":
+        targets = ["trap_room", "ruins_entrance"]
+    elif state.player.location_id == "trap_chamber":
+        targets = ["sanctum", "hall"]
+    elif state.player.location_id == "buried_sanctum":
+        targets = ["trap_room"]
     else:
-        targets = ["village_square"]
+        targets = ["ruins_entrance"]
     if state.player.inventory.get("torch", 0) > 0:
         targets.append("torch")
     return targets
 
 
 def choices_for_state(state: GameState) -> list[str]:
-    if state.player.location_id == "village_square":
-        return ["주변을 조사한다", "창고로 이동한다", "아리아와 대화한다"]
-    if state.player.location_id == "village_warehouse":
-        return ["주변을 조사한다", "아리아와 대화한다", "광장으로 이동한다"]
-    if state.player.location_id == "dark_alley":
-        return ["주변을 조사한다", "여관으로 이동한다", "도망친다"]
-    if state.player.location_id == "crooked_tavern":
-        return ["아리아와 대화한다", "주변을 조사한다", "광장으로 이동한다"]
-    return ["주변을 조사한다", "광장으로 이동한다"]
+    if state.player.location_id == "ruins_entrance":
+        return ["주변을 조사한다", "관리인과 대화한다", "회랑으로 이동한다"]
+    if state.player.location_id == "collapsed_hall":
+        return ["주변을 조사한다", "함정방으로 이동한다", "입구로 돌아간다"]
+    if state.player.location_id == "trap_chamber":
+        return ["주변을 조사한다", "성소로 이동한다", "회랑으로 돌아간다"]
+    if state.player.location_id == "buried_sanctum":
+        return ["주변을 조사한다", "함정방으로 이동한다", "후퇴한다"]
+    return ["주변을 조사한다", "입구로 돌아간다"]
 
 
 def apply_events(state: GameState, events: list[Event]) -> GameState:
@@ -97,8 +97,8 @@ def apply_events(state: GameState, events: list[Event]) -> GameState:
                 next_state.world.global_flags.append(str(event.value))
         elif event.kind == "quest_stage_set":
             payload = dict(event.value or {})
-            if payload.get("quest_id") == "murder_case":
-                next_state.quests.murder_case.stage = int(payload["stage"])
+            if payload.get("quest_id") == "sunken_ruins":
+                next_state.quests.sunken_ruins.stage = int(payload["stage"])
         elif event.kind == "affinity_delta":
             payload = dict(event.value or {})
             npc_id = str(payload["npc_id"])
@@ -136,9 +136,9 @@ def _resolve_move(state: GameState, content: ContentBundle, target: str | None) 
     if target is None:
         return [], _result(False, "MOVE_TARGET_MISSING", False, False, None, ["move_target_missing"])
     mapped_target = {
-        "warehouse": "village_warehouse",
-        "alley": "dark_alley",
-        "tavern": "crooked_tavern",
+        "hall": "collapsed_hall",
+        "trap_room": "trap_chamber",
+        "sanctum": "buried_sanctum",
     }.get(target, target)
     current = next((location for location in content.locations if location.id == state.player.location_id), None)
     if current and mapped_target in current.connections:
@@ -147,48 +147,49 @@ def _resolve_move(state: GameState, content: ContentBundle, target: str | None) 
 
 
 def _resolve_talk(state: GameState) -> tuple[list[Event], EngineResult]:
-    stage = state.quests.murder_case.stage
-    if state.player.location_id in {"village_square", "village_warehouse"}:
-        if stage < 3 and state.has_flag("found_bloody_cloth"):
+    if state.player.location_id == "ruins_entrance":
+        if not state.has_flag("met_caretaker"):
             return [
-                Event("add_player_flag", "met_aria"),
-                Event("affinity_delta", {"npc_id": "aria", "delta": 5}),
-                Event("quest_stage_set", {"quest_id": "murder_case", "stage": 3}),
-            ], _result(True, "ARIA_CLUE_CONFIRMED", False, True, None, ["aria", "quest_advanced"])
-        return [Event("add_player_flag", "met_aria")], _result(True, "ARIA_SMALL_TALK", False, False, None, ["aria"])
-    if state.player.location_id == "crooked_tavern":
-        if stage >= 4:
-            return [
-                Event("add_player_flag", "innkeeper_testimony"),
-                Event("quest_stage_set", {"quest_id": "murder_case", "stage": 5}),
-            ], _result(True, "INNKEEPER_TESTIMONY", False, True, None, ["innkeeper", "quest_advanced"])
-        return [], _result(False, "NO_USEFUL_DIALOGUE", False, False, None, ["innkeeper"])
+                Event("add_player_flag", "met_caretaker"),
+                Event("affinity_delta", {"npc_id": "caretaker", "delta": 2}),
+            ], _result(True, "CARETAKER_BRIEFING", False, False, None, ["caretaker"])
+        return [], _result(True, "CARETAKER_WARNING", False, False, None, ["caretaker"])
     return [], _result(False, "NO_NPC_TO_TALK", False, False, None, ["no_npc"])
 
 
 def _resolve_investigate(state: GameState) -> tuple[list[Event], EngineResult]:
-    stage = state.quests.murder_case.stage
-    if state.player.location_id == "village_square" and stage == 0:
+    stage = state.quests.sunken_ruins.stage
+    if state.player.location_id == "ruins_entrance" and stage == 0:
         return [
-            Event("add_player_flag", "found_blood_mark"),
-            Event("quest_stage_set", {"quest_id": "murder_case", "stage": 1}),
-        ], _result(True, "BLOOD_MARK_FOUND", False, True, None, ["blood_mark"])
-    if state.player.location_id == "village_warehouse" and stage <= 2:
+            Event("add_player_flag", "found_rune"),
+            Event("quest_stage_set", {"quest_id": "sunken_ruins", "stage": 1}),
+        ], _result(True, "RUNE_FOUND", False, True, None, ["rune"])
+    if state.player.location_id == "collapsed_hall" and stage <= 1:
         return [
-            Event("add_player_flag", "found_bloody_cloth"),
-            Event("quest_stage_set", {"quest_id": "murder_case", "stage": 2}),
-        ], _result(True, "BLOODY_CLOTH_FOUND", False, stage != 2, None, ["bloody_cloth"])
-    if state.player.location_id == "dark_alley" and 3 <= stage < 4:
+            Event("add_player_flag", "opened_passage"),
+            Event("quest_stage_set", {"quest_id": "sunken_ruins", "stage": 2}),
+        ], _result(True, "PASSAGE_OPENED", False, True, None, ["passage"])
+    if state.player.location_id == "trap_chamber" and stage <= 2:
         return [
-            Event("add_player_flag", "saw_shadow_in_alley"),
-            Event("quest_stage_set", {"quest_id": "murder_case", "stage": 4}),
-        ], _result(True, "SHADOW_TRACKED", False, True, None, ["shadow", "quest_advanced"])
-    if state.player.location_id == "crooked_tavern" and stage >= 5:
+            Event("add_player_flag", "trap_pattern_known"),
+            Event("quest_stage_set", {"quest_id": "sunken_ruins", "stage": 3}),
+        ], _result(True, "TRAP_REVEALED", False, True, None, ["trap_pattern"])
+    if state.player.location_id == "buried_sanctum" and stage == 3:
         return [
-            Event("add_player_flag", "case_closed"),
-            Event("quest_stage_set", {"quest_id": "murder_case", "stage": 6}),
-            Event("gold_delta", 30),
-        ], _result(True, "GOOD_END_UNLOCKED", False, True, "truth_revealed", ["ending_good"])
+            Event("add_player_flag", "seal_broken"),
+            Event("quest_stage_set", {"quest_id": "sunken_ruins", "stage": 4}),
+        ], _result(True, "SEAL_BROKEN", False, True, None, ["seal"])
+    if state.player.location_id == "buried_sanctum" and stage == 4:
+        return [
+            Event("add_player_flag", "took_relic"),
+            Event("quest_stage_set", {"quest_id": "sunken_ruins", "stage": 5}),
+            Event("gold_delta", 35),
+        ], _result(True, "RELIC_SECURED", False, True, None, ["relic"])
+    if state.player.location_id == "ruins_entrance" and stage >= 5 and state.has_flag("took_relic"):
+        return [
+            Event("add_player_flag", "returned_with_relic"),
+            Event("quest_stage_set", {"quest_id": "sunken_ruins", "stage": 6}),
+        ], _result(True, "RELIC_RECOVERED", False, True, "relic_recovered", ["ending_good"])
     return [], _result(False, "NOTHING_FOUND", False, False, None, ["empty_search"])
 
 
@@ -199,11 +200,16 @@ def _resolve_use_item(state: GameState, target: str | None) -> tuple[list[Event]
 
 
 def _resolve_flee(state: GameState) -> tuple[list[Event], EngineResult]:
-    if state.quests.murder_case.stage >= 4:
+    if state.player.location_id == "buried_sanctum" and state.quests.sunken_ruins.stage >= 4 and not state.has_flag("took_relic"):
         return [
-            Event("add_player_flag", "coward_ending"),
-            Event("quest_stage_set", {"quest_id": "murder_case", "stage": 99}),
-        ], _result(True, "BAD_END_FLEE", False, True, "cowardice", ["ending_bad"])
+            Event("add_player_flag", "curse_marked"),
+            Event("quest_stage_set", {"quest_id": "sunken_ruins", "stage": 99}),
+        ], _result(True, "CURSE_TRIGGERED", False, True, "greed_awakened", ["ending_curse"])
+    if state.quests.sunken_ruins.stage >= 2:
+        return [
+            Event("add_player_flag", "retreated_alive"),
+            Event("quest_stage_set", {"quest_id": "sunken_ruins", "stage": 99}),
+        ], _result(True, "RETREAT_END", False, True, "retreated_alive", ["ending_retreat"])
     return [], _result(False, "FLEE_TOO_EARLY", False, False, None, ["flee_blocked"])
 
 

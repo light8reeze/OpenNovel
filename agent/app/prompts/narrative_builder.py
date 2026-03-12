@@ -39,7 +39,7 @@ Current State Summary:
 - location_id: {request.state_summary.location_id}
 - hp: {request.state_summary.hp}
 - gold: {request.state_summary.gold}
-- murder_case_stage: {request.state_summary.murder_case_stage}
+- sunken_ruins_stage: {request.state_summary.sunken_ruins_stage}
 - player_flags: {", ".join(request.state_summary.player_flags) or "-"}
 
 Scene Context:
@@ -58,7 +58,7 @@ Allowed choices:
 규칙:
 - allowed_choices에 없는 선택지를 생성하지 마라.
 - 한국어로 응답하라.
-- 분위기는 dark fantasy mystery이되 과장된 시적 표현은 피한다.
+- 분위기는 dark ruins exploration이며 과장된 시적 표현은 피한다.
 - choice는 2개 이상 4개 이하로 유지한다.
 - retrieval context는 장면/말투 참고용이며 입력 상태를 덮어쓰면 안 된다.
 """

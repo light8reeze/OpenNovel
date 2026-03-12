@@ -104,9 +104,9 @@ LLM은 **엔진이 결정한 결과를 표현만 한다.**
 ```
 HP_DELTA(-10)
 GOLD_DELTA(+30)
-ADD_FLAG("found_blood_mark")
-QUEST_STAGE_SET("murder_case", 2)
-AFFINITY_DELTA("aria", +5)
+ADD_FLAG("found_rune")
+QUEST_STAGE_SET("sunken_ruins", 2)
+AFFINITY_DELTA("caretaker", +2)
 ```
 
 LLM은 Event를 생성하지 않는다.
@@ -125,8 +125,8 @@ MVP에서는 단순한 상태 모델을 사용한다.
   },
   "player": {
     "hp": 100,
-    "gold": 20,
-    "location_id": "village_square",
+    "gold": 15,
+    "location_id": "ruins_entrance",
     "inventory": {
       "torch": 1
     },
@@ -134,19 +134,19 @@ MVP에서는 단순한 상태 모델을 사용한다.
   },
   "world": {
     "time": "night",
-    "global_flags": ["murder_case_active"],
+    "global_flags": ["sunken_ruins_open"],
     "alert_by_region": {
-      "village": 10
+      "ruins": 6
     }
   },
   "quests": {
-    "murder_case": {
+    "sunken_ruins": {
       "stage": 0
     }
   },
   "relations": {
     "npc_affinity": {
-      "aria": 10
+      "caretaker": 5
     }
   }
 }
@@ -212,8 +212,8 @@ LLM의 절대 규칙이다.
 
 예:
 
-* 장르: 다크 판타지 추리
-* 분위기: 어둡고 긴장감 있는 분위기
+* 장르: 다크 판타지 던전 탐험
+* 분위기: 오래 잠든 폐허와 봉인의 긴장감
 * 문체: 간결하지만 몰입감 있는 묘사
 * 과도한 시적 표현 금지
 
@@ -226,20 +226,20 @@ LLM의 절대 규칙이다.
 예:
 
 ```
-현재 위치: village warehouse
+현재 위치: collapsed hall
 시간: night
 
 HP: 80
 Gold: 20
 
-Quest: murder_case stage=1
+Quest: sunken_ruins stage=2
 
 Flags:
-- met_aria
-- found_bloody_cloth
+- found_rune
+- opened_passage
 
 NPC affinity:
-aria = 10
+caretaker = 7
 ```
 
 ---
@@ -251,15 +251,15 @@ Game Engine이 판정한 결과이다.
 예:
 
 ```
-Player action: 창고 문을 조사한다
+Player action: 성소의 제단을 조사한다
 Normalized action: INVESTIGATE
 
 Result:
 success: true
-found_clue: hidden_blood_mark
+message_code: SEAL_BROKEN
 hp_delta: 0
 gold_delta: 0
-quest_stage_changed: false
+quest_stage_changed: true
 ```
 
 LLM은 이 결과를 기반으로 **묘사만 생성한다.**
@@ -274,11 +274,11 @@ LLM 출력은 JSON 형식으로 제한한다.
 
 ```json
 {
-  "narrative": "창고 문틈 사이로 희미한 쇠 냄새가 스며 나왔다. 손잡이 아래쪽에는 마르다 만 붉은 얼룩이 길게 번져 있었다.",
+  "narrative": "갈라진 제단 표면을 따라 희미한 빛이 번지더니 오래 잠들어 있던 봉인이 마침내 금을 내기 시작한다.",
   "choices": [
-    "문을 열어 안을 살핀다",
-    "아리아를 불러 이 흔적을 보여준다",
-    "주변 바닥을 더 조사한다"
+    "주변을 더 조사한다",
+    "함정방으로 이동한다",
+    "후퇴한다"
   ]
 }
 ```
@@ -321,9 +321,9 @@ choices
 | 입력        | Action      |
 | --------- | ----------- |
 | 주변을 살펴본다  | INVESTIGATE |
-| 경비병을 공격한다 | ATTACK      |
-| 그녀와 대화한다  | TALK        |
-| 골목에서 도망친다 | FLEE        |
+| 관리인과 대화한다 | TALK        |
+| 회랑으로 이동한다 | MOVE        |
+| 유적에서 후퇴한다 | FLEE        |
 
 ---
 
@@ -340,9 +340,9 @@ choices
 
 ```
 최근 사건 요약:
-- 플레이어는 아리아와 만났다
-- 피 묻은 천 조각을 발견했다
-- 창고 근처에서 수상한 흔적을 발견했다
+- 플레이어는 관리인에게 유적의 경고를 들었다
+- 입구 문양에서 봉인 흔적을 확인했다
+- 함정방에서 바닥 장치의 패턴을 파악했다
 ```
 
 ---

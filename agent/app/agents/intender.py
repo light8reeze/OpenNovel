@@ -72,25 +72,25 @@ class IntenderAgent:
         target = None
         confidence = 0.55
 
-        if any(token in normalized for token in ("창고", "warehouse")):
+        if any(token in normalized for token in ("회랑", "hall")):
             action_type = ActionType.MOVE
-            target = "warehouse"
+            target = "hall"
             confidence = 0.92
-        elif any(token in normalized for token in ("골목", "alley")):
+        elif any(token in normalized for token in ("함정방", "함정", "trap room", "trap")):
             action_type = ActionType.MOVE
-            target = "alley"
+            target = "trap_room"
             confidence = 0.92
-        elif any(token in normalized for token in ("여관", "tavern", "inn")):
+        elif any(token in normalized for token in ("성소", "제단", "sanctum", "altar")):
             action_type = ActionType.MOVE
-            target = "tavern"
+            target = "sanctum"
             confidence = 0.92
-        elif any(token in normalized for token in ("광장", "square")):
+        elif any(token in normalized for token in ("입구", "entrance", "되돌아", "돌아간다")):
             action_type = ActionType.MOVE
-            target = "village_square"
+            target = "ruins_entrance"
             confidence = 0.88
-        elif any(token in normalized for token in ("아리아", "aria", "대화", "talk")):
+        elif any(token in normalized for token in ("관리인", "안내자", "caretaker", "대화", "talk")):
             action_type = ActionType.TALK
-            target = "aria"
+            target = "caretaker"
             confidence = 0.94
         elif any(token in normalized for token in ("휴식", "rest")):
             action_type = ActionType.REST
@@ -99,7 +99,7 @@ class IntenderAgent:
             action_type = ActionType.USE_ITEM
             target = "torch"
             confidence = 0.84
-        elif any(token in normalized for token in ("도망", "flee")):
+        elif any(token in normalized for token in ("도망", "후퇴", "retreat", "flee")):
             action_type = ActionType.FLEE
             confidence = 0.83
 

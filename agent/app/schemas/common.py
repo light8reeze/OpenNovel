@@ -26,7 +26,7 @@ class StateSummary(BaseModel):
     location_id: str
     hp: int
     gold: int
-    murder_case_stage: int
+    sunken_ruins_stage: int
     player_flags: list[str] = Field(default_factory=list)
 
 

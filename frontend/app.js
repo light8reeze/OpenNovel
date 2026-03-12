@@ -45,7 +45,7 @@ function renderState(state) {
       <dt>HP</dt><dd>${state.player.hp}</dd>
       <dt>Gold</dt><dd>${state.player.gold}</dd>
       <dt>Location</dt><dd>${state.player.location_id}</dd>
-      <dt>Quest Stage</dt><dd>${state.quests.murder_case.stage}</dd>
+      <dt>Quest Stage</dt><dd>${state.quests.sunken_ruins.stage}</dd>
     </dl>
   `;
 }

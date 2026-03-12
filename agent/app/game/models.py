@@ -34,7 +34,7 @@ class QuestProgress(BaseModel):
 
 
 class QuestState(BaseModel):
-    murder_case: QuestProgress
+    sunken_ruins: QuestProgress
 
 
 class RelationsState(BaseModel):
@@ -56,7 +56,7 @@ class GameState(BaseModel):
             location_id=self.player.location_id,
             hp=self.player.hp,
             gold=self.player.gold,
-            murder_case_stage=self.quests.murder_case.stage,
+            sunken_ruins_stage=self.quests.sunken_ruins.stage,
             player_flags=list(self.player.flags),
         )
 
@@ -137,7 +137,7 @@ class QuestDefinition(BaseModel):
 class ContentBundle(BaseModel):
     locations: list[Location]
     npcs: list[Npc]
-    murder_case: QuestDefinition
+    sunken_ruins: QuestDefinition
 
     @classmethod
     def load_from_disk(cls, root: Path) -> "ContentBundle":
@@ -145,8 +145,8 @@ class ContentBundle(BaseModel):
 
         locations = [Location.model_validate(item) for item in json.loads((root / "locations.json").read_text(encoding="utf-8"))]
         npcs = [Npc.model_validate(item) for item in json.loads((root / "npcs.json").read_text(encoding="utf-8"))]
-        murder_case = QuestDefinition.model_validate(
-            json.loads((root / "quests" / "murder_case.json").read_text(encoding="utf-8"))
+        sunken_ruins = QuestDefinition.model_validate(
+            json.loads((root / "quests" / "sunken_ruins.json").read_text(encoding="utf-8"))
         )
         location_ids = {location.id for location in locations}
         for location in locations:
@@ -156,7 +156,7 @@ class ContentBundle(BaseModel):
         for npc in npcs:
             if npc.location_id not in location_ids:
                 raise ValueError(f"npc '{npc.id}' references unknown location '{npc.location_id}'")
-        return cls(locations=locations, npcs=npcs, murder_case=murder_case)
+        return cls(locations=locations, npcs=npcs, sunken_ruins=sunken_ruins)
 
     def location_name(self, location_id: str) -> str:
         for location in self.locations:
@@ -190,16 +190,16 @@ def initial_state() -> GameState:
         meta=MetaState(turn=0, seed=12345),
         player=PlayerState(
             hp=100,
-            gold=20,
-            location_id="village_square",
+            gold=15,
+            location_id="ruins_entrance",
             inventory=dict(Counter({"torch": 1})),
             flags=[],
         ),
         world=WorldState(
             time="night",
-            global_flags=["murder_case_active"],
-            alert_by_region={"village": 10},
+            global_flags=["sunken_ruins_open"],
+            alert_by_region={"ruins": 6},
         ),
-        quests=QuestState(murder_case=QuestProgress(stage=0)),
-        relations=RelationsState(npc_affinity={"aria": 10, "innkeeper": 0}),
+        quests=QuestState(sunken_ruins=QuestProgress(stage=0)),
+        relations=RelationsState(npc_affinity={"caretaker": 5}),
     )

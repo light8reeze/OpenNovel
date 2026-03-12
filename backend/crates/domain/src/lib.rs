@@ -38,7 +38,7 @@ pub struct QuestProgress {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct QuestState {
-    pub murder_case: QuestProgress,
+    pub sunken_ruins: QuestProgress,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -111,7 +111,7 @@ pub struct StateSummary {
     pub location_id: String,
     pub hp: i32,
     pub gold: i32,
-    pub murder_case_stage: u32,
+    pub sunken_ruins_stage: u32,
     pub player_flags: Vec<String>,
 }
 
@@ -161,11 +161,10 @@ pub fn initial_state() -> GameState {
     inventory.insert("torch".to_string(), 1);
 
     let mut alert_by_region = BTreeMap::new();
-    alert_by_region.insert("village".to_string(), 10);
+    alert_by_region.insert("ruins".to_string(), 6);
 
     let mut npc_affinity = BTreeMap::new();
-    npc_affinity.insert("aria".to_string(), 10);
-    npc_affinity.insert("innkeeper".to_string(), 0);
+    npc_affinity.insert("caretaker".to_string(), 5);
 
     GameState {
         meta: MetaState {
@@ -174,18 +173,18 @@ pub fn initial_state() -> GameState {
         },
         player: PlayerState {
             hp: 100,
-            gold: 20,
-            location_id: "village_square".to_string(),
+            gold: 15,
+            location_id: "ruins_entrance".to_string(),
             inventory,
             flags: Vec::new(),
         },
         world: WorldState {
             time: "night".to_string(),
-            global_flags: vec!["murder_case_active".to_string()],
+            global_flags: vec!["sunken_ruins_open".to_string()],
             alert_by_region,
         },
         quests: QuestState {
-            murder_case: QuestProgress { stage: 0 },
+            sunken_ruins: QuestProgress { stage: 0 },
         },
         relations: RelationsState { npc_affinity },
     }
@@ -198,7 +197,7 @@ impl GameState {
             location_id: self.player.location_id.clone(),
             hp: self.player.hp,
             gold: self.player.gold,
-            murder_case_stage: self.quests.murder_case.stage,
+            sunken_ruins_stage: self.quests.sunken_ruins.stage,
             player_flags: self.player.flags.clone(),
         }
     }
@@ -317,8 +316,8 @@ mod tests {
     fn initial_state_matches_contract() {
         let state = initial_state();
         assert_eq!(state.meta.turn, 0);
-        assert_eq!(state.player.location_id, "village_square");
-        assert_eq!(state.quests.murder_case.stage, 0);
+        assert_eq!(state.player.location_id, "ruins_entrance");
+        assert_eq!(state.quests.sunken_ruins.stage, 0);
         assert_eq!(state.player.inventory.get("torch"), Some(&1));
     }
 

@@ -123,13 +123,16 @@ class GameSessionService:
         ]
         for input_text in [
             "주변을 조사한다",
-            "창고로 이동한다",
+            "회랑으로 이동한다",
             "주변을 조사한다",
-            "아리아와 대화한다",
-            "골목으로 이동한다",
+            "함정방으로 이동한다",
             "주변을 조사한다",
-            "여관으로 이동한다",
-            "아리아와 대화한다",
+            "성소로 이동한다",
+            "주변을 조사한다",
+            "주변을 조사한다",
+            "함정방으로 이동한다",
+            "회랑으로 돌아간다",
+            "입구로 돌아간다",
             "주변을 조사한다",
         ]:
             action_response = self.apply_action(ActionRequest(sessionId=session_id, inputText=input_text))
@@ -205,10 +208,8 @@ class GameSessionService:
         )
 
     def _npcs_in_scene(self, state: GameState) -> list[str]:
-        if state.player.location_id in {"village_square", "village_warehouse"}:
-            return ["aria"]
-        if state.player.location_id == "crooked_tavern":
-            return ["innkeeper"]
+        if state.player.location_id == "ruins_entrance":
+            return ["caretaker"]
         return []
 
     def _build_session_narrator(self, options: StartOptions) -> NarratorAgent:

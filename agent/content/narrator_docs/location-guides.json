@@ -1,26 +1,34 @@
 [
   {
-    "id": "narrator-location-square",
+    "id": "narrator-location-entrance",
     "role": "narrator",
-    "text": "village_square는 축축한 밤공기와 닫힌 상점, 사람들의 불안이 느껴지는 광장으로 묘사한다.",
-    "location_id": "village_square",
+    "text": "ruins_entrance는 찬 안개, 금이 간 석문, 오래 잠든 계단으로 묘사한다.",
+    "location_id": "ruins_entrance",
     "visibility": "player",
-    "tags": ["tone", "location"]
+    "tags": ["tone", "location", "entrance"]
   },
   {
-    "id": "narrator-location-warehouse",
+    "id": "narrator-location-hall",
     "role": "narrator",
-    "text": "village_warehouse는 습기, 낡은 목재, 감춰진 흔적, 쇠 냄새 같은 감각으로 묘사한다.",
-    "location_id": "village_warehouse",
+    "text": "collapsed_hall는 무너진 기둥, 습기, 메아리, 불빛을 삼키는 어둠으로 묘사한다.",
+    "location_id": "collapsed_hall",
     "visibility": "player",
-    "tags": ["tone", "location", "warehouse"]
+    "tags": ["tone", "location", "hall"]
   },
   {
-    "id": "narrator-location-alley",
+    "id": "narrator-location-trap",
     "role": "narrator",
-    "text": "dark_alley는 진흙, 불빛이 닿지 않는 벽, 급히 남겨진 흔적 같은 긴장감을 준다.",
-    "location_id": "dark_alley",
+    "text": "trap_chamber는 금이 간 문양, 먼지, 발밑의 긴장감, 억눌린 함정의 기척으로 묘사한다.",
+    "location_id": "trap_chamber",
     "visibility": "player",
-    "tags": ["tone", "location", "alley"]
+    "tags": ["tone", "location", "trap"]
+  },
+  {
+    "id": "narrator-location-sanctum",
+    "role": "narrator",
+    "text": "buried_sanctum은 재와 먼지, 봉인된 제단, 오래된 감시의 시선으로 묘사한다.",
+    "location_id": "buried_sanctum",
+    "visibility": "player",
+    "tags": ["tone", "location", "sanctum"]
   }
 ]

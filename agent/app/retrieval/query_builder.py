@@ -20,7 +20,7 @@ def build_narrator_query(kind: str, request: NarrativeRequest) -> str:
             kind,
             request.scene_context.location_name,
             request.state_summary.location_id,
-            f"stage={request.state_summary.murder_case_stage}",
+            f"stage={request.state_summary.sunken_ruins_stage}",
             engine_code,
             ",".join(request.scene_context.npcs_in_scene),
         ]

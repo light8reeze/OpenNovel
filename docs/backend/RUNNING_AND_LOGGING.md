@@ -94,8 +94,8 @@ agent는 Python 프로젝트이며 FastAPI 기반으로 구성되어 있다.
 
 현재 heuristic fallback 예시는 다음을 포함한다.
 
-- `창고`, `warehouse` → `MOVE`
-- `아리아`, `talk` → `TALK`
+- `회랑`, `hall` → `MOVE`
+- `관리인`, `caretaker`, `talk` → `TALK`
 - `휴식` → `REST`
 - `횃불` → `USE_ITEM`
 - 그 외 기본값 → `INVESTIGATE`
