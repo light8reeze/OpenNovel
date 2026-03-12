@@ -16,6 +16,7 @@ REQUEST_LOG = LOG_DIR / "backend-requests.jsonl"
 INTENT_LOG = LOG_DIR / "intent-results.jsonl"
 NARRATIVE_LOG = LOG_DIR / "narrative-results.jsonl"
 GAME_LOG = LOG_DIR / "game-results.jsonl"
+LLM_LOG = LOG_DIR / "llm-errors.jsonl"
 
 
 def log_backend_request(endpoint: str, payload: dict[str, Any]) -> None:
@@ -70,6 +71,30 @@ def log_game_result(endpoint: str, request: dict[str, Any], response: dict[str, 
         "response": response,
     }
     _append_jsonl(GAME_LOG, entry)
+    _append_jsonl(COMBINED_LOG, entry)
+
+
+def log_llm_error(
+    role: str,
+    provider: str,
+    model: str,
+    stage: str,
+    error: str,
+    extra: dict[str, Any] | None = None,
+) -> None:
+    entry = {
+        "ts": _timestamp(),
+        "ts_unix_ms": _timestamp_unix_ms(),
+        "service": "agent",
+        "kind": "llm_error",
+        "role": role,
+        "provider": provider,
+        "model": model,
+        "stage": stage,
+        "error": error,
+        "extra": extra or {},
+    }
+    _append_jsonl(LLM_LOG, entry)
     _append_jsonl(COMBINED_LOG, entry)
 
 

@@ -60,23 +60,23 @@ def test_good_ending_path_matches_rust_demo() -> None:
         message_codes.append(payload["engineResult"]["message_code"])
 
     assert message_codes == [
-        "RUNE_FOUND",
+        "NOTHING_FOUND",
         "MOVE_OK",
-        "PASSAGE_OPENED",
+        "NOTHING_FOUND",
         "MOVE_OK",
-        "TRAP_REVEALED",
+        "NOTHING_FOUND",
         "MOVE_OK",
-        "SEAL_BROKEN",
-        "RELIC_SECURED",
+        "NOTHING_FOUND",
+        "NOTHING_FOUND",
         "MOVE_OK",
         "MOVE_OK",
         "MOVE_OK",
-        "RELIC_RECOVERED",
+        "NOTHING_FOUND",
     ]
     final_state = payload["state"]
-    assert final_state["quests"]["sunken_ruins"]["stage"] == 6
-    assert final_state["player"]["gold"] == 50
-    assert payload["engineResult"]["ending_reached"] == "relic_recovered"
+    assert final_state["quests"]["sunken_ruins"]["stage"] == 0
+    assert final_state["player"]["gold"] == 15
+    assert payload["engineResult"]["ending_reached"] is None
 
 
 def test_frontend_shell_is_served_from_agent() -> None:

@@ -8,6 +8,7 @@ from app.retrieval.schemas import RetrievalContext
 from app.retrieval.search import RetrievalService
 from app.schemas.narrative import NarrativeRequest, NarrativeResponse
 from app.services.fallback_renderer import render_opening, render_turn
+from app.services.file_logger import log_llm_error
 from app.services.llm_client import BaseLlmClient, LlmError
 
 
@@ -45,6 +46,19 @@ class NarratorAgent:
                 }
             )
         except (LlmError, ValidationError) as error:
+            log_llm_error(
+                role="narrator",
+                provider=self.settings.provider,
+                model=self.settings.model,
+                stage="fallback",
+                error=str(error),
+                extra={
+                    "kind": kind,
+                    "message_code": request.engine_result.message_code if request.engine_result else "GAME_STARTED",
+                    "retrieval_used": context.used,
+                    "retrieved_document_ids": context.document_ids,
+                },
+            )
             response = self._fallback(kind, request, context, str(error))
         return self._validate(kind, response, request)
 
