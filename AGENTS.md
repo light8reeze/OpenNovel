@@ -66,7 +66,6 @@ LLM은 **표현 계층(Narrative Layer)** 이다.
 * 기본 템플릿 narrative 폴백
 * 선택적 Gemini 기반 narrative 생성
 * 단일 서버에서 정적 frontend 서빙
-* Rust workspace 기반 reference backend 코드베이스
 
 아직 미구현 또는 placeholder 상태인 항목은 다음과 같다.
 

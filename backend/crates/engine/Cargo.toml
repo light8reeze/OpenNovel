@@ -1,9 +1,0 @@
-[package]
-name = "engine"
-edition.workspace = true
-license.workspace = true
-version.workspace = true
-
-[dependencies]
-content = { path = "../content" }
-domain = { path = "../domain" }
