@@ -2,20 +2,23 @@ from app.schemas.narrative import NarrativeRequest, NarrativeResponse
 
 
 OPENING_TEXT = (
-    "{location_name}. 축축한 밤공기 속에서 마을은 숨을 죽인 채 가라앉아 있다. "
-    "멀리서 문이 닫히는 둔탁한 소리가 한 번 울린다."
+    "{location_name}. 축축한 밤공기와 무너진 석재 사이로 오래 잠든 유적의 냄새가 스며 나온다. "
+    "입구 아래로는 횃불빛조차 삼켜 버릴 것 같은 어둠이 천천히 입을 벌리고 있다."
 )
 
 
 TURN_TEXT = {
     "MOVE_OK": "당신은 조심스럽게 발걸음을 옮긴다. 공기 결이 미세하게 바뀌며 장면이 넘어간다.",
-    "BLOOD_MARK_FOUND": "젖은 바닥의 틈에서 마르다 만 핏자국이 모습을 드러낸다.",
-    "BLOODY_CLOTH_FOUND": "낡은 상자 틈에서 피가 눌어붙은 천 조각이 천천히 끌려 나온다.",
-    "ARIA_CLUE_CONFIRMED": "아리아는 손에 든 단서를 보자 숨을 삼키고 낮은 목소리로 기억을 꺼낸다.",
-    "SHADOW_TRACKED": "골목의 진흙 바닥에 깊게 찍힌 자국이 다음 장소를 가리킨다.",
-    "INNKEEPER_TESTIMONY": "여관 주인은 오래 망설인 끝에 밤중의 목격담을 털어놓는다.",
-    "GOOD_END_UNLOCKED": "흩어진 조각들이 하나로 맞물리며 사건의 윤곽이 또렷해진다.",
-    "BAD_END_FLEE": "당신이 등을 돌리자 진실은 어둠 속으로 더 깊이 가라앉는다.",
+    "RUNE_FOUND": "무너진 입구의 문양 사이에서 희미한 봉인 흔적이 드러난다.",
+    "PASSAGE_OPENED": "갈라진 회랑의 틈새가 서서히 열리며 더 깊은 길을 허락한다.",
+    "TRAP_REVEALED": "바닥을 가로지르는 얕은 홈과 눌린 돌이 함정의 질서를 드러낸다.",
+    "SEAL_BROKEN": "오래 버티던 봉인이 마른 숨을 토하듯 갈라지며 제단의 어둠을 연다.",
+    "RELIC_SECURED": "제단 중심에서 차가운 유물이 손안으로 미끄러지며 유적 전체가 낮게 떨린다.",
+    "RELIC_RECOVERED": "끝내 유물을 품에 안고 입구의 밤공기 속으로 돌아온다.",
+    "CARETAKER_BRIEFING": "관리인은 낮은 목소리로 유적의 봉인과 후퇴 시점을 짧게 일러 준다.",
+    "CARETAKER_WARNING": "관리인은 더 깊이 들어갈수록 욕심보다 발걸음을 먼저 의심하라고 경고한다.",
+    "CURSE_TRIGGERED": "후퇴하려는 순간 어둠이 발목을 감싸며 유적의 저주가 뒤늦게 깨어난다.",
+    "RETREAT_END": "당신은 등을 돌리고 밤의 바람 속으로 빠져나온다. 유적은 다시 침묵한다.",
 }
 
 
@@ -32,7 +35,7 @@ def render_turn(request: NarrativeRequest) -> NarrativeResponse:
     message_code = request.engine_result.message_code if request.engine_result else ""
     narrative = TURN_TEXT.get(
         message_code,
-        "상황은 움직였지만 아직 모든 실마리가 이어진 것은 아니다.",
+        "유적은 조용히 다음 반응을 기다리고 있다.",
     )
     return NarrativeResponse(
         narrative=narrative,

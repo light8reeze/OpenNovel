@@ -36,7 +36,7 @@ def build_intent_prompts(
 - location_id: {request.state_summary.location_id}
 - hp: {request.state_summary.hp}
 - gold: {request.state_summary.gold}
-- murder_case_stage: {request.state_summary.murder_case_stage}
+- sunken_ruins_stage: {request.state_summary.sunken_ruins_stage}
 - player_flags: {", ".join(request.state_summary.player_flags) or "-"}
 
 장면 정보:
@@ -52,5 +52,6 @@ retrieval context:
 - visible_targets에 없는 target은 내면 안 된다.
 - 모호하면 INVESTIGATE로 낮은 confidence를 준다.
 - retrieval context는 힌트일 뿐이며 입력/상태보다 우선하면 안 된다.
+- 이동 target은 `hall`, `trap_room`, `sanctum`, `ruins_entrance`, `caretaker`, `torch` 같은 현재 visible_targets vocabulary만 사용한다.
 """
     return system_prompt, user_prompt

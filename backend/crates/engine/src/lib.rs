@@ -42,38 +42,63 @@ pub fn resolve_action_input(
 }
 
 pub fn heuristic_parse_action(input: &str) -> Action {
-    parse_action(input)
+    let normalized = input.trim().to_lowercase();
+    let (action_type, target) = if contains_any(&normalized, &["회랑", "hall"]) {
+        (ActionType::Move, Some("hall".to_string()))
+    } else if contains_any(&normalized, &["함정방", "trap room", "trap"]) {
+        (ActionType::Move, Some("trap_room".to_string()))
+    } else if contains_any(&normalized, &["성소", "sanctum", "제단"]) {
+        (ActionType::Move, Some("sanctum".to_string()))
+    } else if contains_any(&normalized, &["입구", "entrance"]) {
+        (ActionType::Move, Some("ruins_entrance".to_string()))
+    } else if contains_any(
+        &normalized,
+        &["관리인", "안내자", "caretaker", "대화", "talk"],
+    ) {
+        (ActionType::Talk, Some("caretaker".to_string()))
+    } else if contains_any(&normalized, &["휴식", "rest"]) {
+        (ActionType::Rest, None)
+    } else if contains_any(&normalized, &["횃불", "torch"]) {
+        (ActionType::UseItem, Some("torch".to_string()))
+    } else if contains_any(&normalized, &["도망", "후퇴", "retreat", "flee"]) {
+        (ActionType::Flee, None)
+    } else {
+        (ActionType::Investigate, None)
+    };
+
+    Action {
+        action_type,
+        target,
+        raw_input: input.to_string(),
+    }
 }
 
 pub fn allowed_actions_for_state(state: &GameState) -> Vec<ActionType> {
-    let mut actions = vec![ActionType::Investigate, ActionType::Move];
-    match state.player.location_id.as_str() {
-        "village_square" | "village_warehouse" | "crooked_tavern" => {
-            actions.push(ActionType::Talk);
-        }
-        _ => {}
+    let mut actions = vec![ActionType::Investigate, ActionType::Move, ActionType::Rest];
+    if state.player.location_id == "ruins_entrance" {
+        actions.push(ActionType::Talk);
     }
     if state.player.inventory.get("torch").copied().unwrap_or(0) > 0 {
         actions.push(ActionType::UseItem);
     }
-    if state.player.location_id == "dark_alley" || state.quests.murder_case.stage >= 4 {
+    if state.quests.sunken_ruins.stage >= 2 {
         actions.push(ActionType::Flee);
     }
-    actions.push(ActionType::Rest);
     actions
 }
 
 pub fn visible_targets_for_state(state: &GameState) -> Vec<String> {
     let mut targets: Vec<String> = match state.player.location_id.as_str() {
-        "village_square" => vec!["warehouse", "aria", "village_square"],
-        "village_warehouse" => vec!["aria", "village_square"],
-        "dark_alley" => vec!["tavern", "dark_alley"],
-        "crooked_tavern" => vec!["aria", "innkeeper", "village_square"],
-        _ => vec!["village_square"],
+        "ruins_entrance" => vec!["caretaker", "hall", "ruins_entrance"],
+        "collapsed_hall" => vec!["trap_room", "ruins_entrance"],
+        "trap_chamber" => vec!["sanctum", "hall"],
+        "buried_sanctum" => vec!["trap_room"],
+        _ => vec!["ruins_entrance"],
     }
     .into_iter()
     .map(str::to_string)
     .collect();
+
     if state.player.inventory.get("torch").copied().unwrap_or(0) > 0 {
         targets.push("torch".to_string());
     }
@@ -83,12 +108,8 @@ pub fn visible_targets_for_state(state: &GameState) -> Vec<String> {
 pub fn apply_events(mut state: GameState, events: &[Event]) -> GameState {
     for event in events {
         match event {
-            Event::HpDelta(delta) => {
-                state.player.hp = (state.player.hp + delta).clamp(0, 100);
-            }
-            Event::GoldDelta(delta) => {
-                state.player.gold = (state.player.gold + delta).max(0);
-            }
+            Event::HpDelta(delta) => state.player.hp = (state.player.hp + delta).clamp(0, 100),
+            Event::GoldDelta(delta) => state.player.gold = (state.player.gold + delta).max(0),
             Event::AddPlayerFlag(flag) => {
                 if !state.player.flags.iter().any(|existing| existing == flag) {
                     state.player.flags.push(flag.clone());
@@ -105,8 +126,8 @@ pub fn apply_events(mut state: GameState, events: &[Event]) -> GameState {
                 }
             }
             Event::QuestStageSet { quest_id, stage } => {
-                if quest_id == "murder_case" {
-                    state.quests.murder_case.stage = *stage;
+                if quest_id == "sunken_ruins" {
+                    state.quests.sunken_ruins.stage = *stage;
                 }
             }
             Event::AffinityDelta { npc_id, delta } => {
@@ -117,47 +138,15 @@ pub fn apply_events(mut state: GameState, events: &[Event]) -> GameState {
                     .or_insert(0);
                 *entry += delta;
             }
-            Event::MovePlayer { location_id } => {
-                state.player.location_id = location_id.clone();
-            }
+            Event::MovePlayer { location_id } => state.player.location_id = location_id.clone(),
             Event::AddItem { item_id, amount } => {
                 let entry = state.player.inventory.entry(item_id.clone()).or_insert(0);
                 *entry = (*entry + amount).max(0);
             }
         }
     }
-
     state.meta.turn += 1;
     state
-}
-
-fn parse_action(input: &str) -> Action {
-    let normalized = input.trim().to_lowercase();
-    let (action_type, target) = if contains_any(&normalized, &["창고", "warehouse"]) {
-        (ActionType::Move, Some("warehouse".to_string()))
-    } else if contains_any(&normalized, &["골목", "alley"]) {
-        (ActionType::Move, Some("alley".to_string()))
-    } else if contains_any(&normalized, &["여관", "tavern", "inn"]) {
-        (ActionType::Move, Some("tavern".to_string()))
-    } else if contains_any(&normalized, &["광장", "square"]) {
-        (ActionType::Move, Some("village_square".to_string()))
-    } else if contains_any(&normalized, &["아리아", "aria", "대화", "talk"]) {
-        (ActionType::Talk, Some("aria".to_string()))
-    } else if contains_any(&normalized, &["휴식", "rest"]) {
-        (ActionType::Rest, None)
-    } else if contains_any(&normalized, &["횃불", "torch"]) {
-        (ActionType::UseItem, Some("torch".to_string()))
-    } else if contains_any(&normalized, &["도망", "flee"]) {
-        (ActionType::Flee, None)
-    } else {
-        (ActionType::Investigate, None)
-    };
-
-    Action {
-        action_type,
-        target,
-        raw_input: input.to_string(),
-    }
 }
 
 fn resolve_action(
@@ -212,9 +201,9 @@ fn resolve_move(
     };
 
     let mapped_target = match target {
-        "warehouse" => "village_warehouse",
-        "alley" => "dark_alley",
-        "tavern" => "crooked_tavern",
+        "hall" => "collapsed_hall",
+        "trap_room" => "trap_chamber",
+        "sanctum" => "buried_sanctum",
         other => other,
     };
 
@@ -251,147 +240,128 @@ fn resolve_move(
 }
 
 fn resolve_talk(state: &GameState) -> (Vec<Event>, EngineResult) {
-    let stage = state.quests.murder_case.stage;
-    match state.player.location_id.as_str() {
-        "village_square" | "village_warehouse" => {
-            if stage < 3 && state.has_flag("found_bloody_cloth") {
-                (
-                    vec![
-                        Event::AddPlayerFlag("met_aria".to_string()),
-                        Event::AffinityDelta {
-                            npc_id: "aria".to_string(),
-                            delta: 5,
-                        },
-                        Event::QuestStageSet {
-                            quest_id: "murder_case".to_string(),
-                            stage: 3,
-                        },
-                    ],
-                    result(
-                        true,
-                        "ARIA_CLUE_CONFIRMED",
-                        false,
-                        true,
-                        None,
-                        vec!["aria", "quest_advanced"],
-                    ),
-                )
-            } else {
-                (
-                    vec![Event::AddPlayerFlag("met_aria".to_string())],
-                    result(true, "ARIA_SMALL_TALK", false, false, None, vec!["aria"]),
-                )
-            }
-        }
-        "crooked_tavern" => {
-            if stage >= 4 {
-                (
-                    vec![
-                        Event::AddPlayerFlag("innkeeper_testimony".to_string()),
-                        Event::QuestStageSet {
-                            quest_id: "murder_case".to_string(),
-                            stage: 5,
-                        },
-                    ],
-                    result(
-                        true,
-                        "INNKEEPER_TESTIMONY",
-                        false,
-                        true,
-                        None,
-                        vec!["innkeeper", "quest_advanced"],
-                    ),
-                )
-            } else {
-                (
-                    Vec::new(),
-                    result(
-                        false,
-                        "NO_USEFUL_DIALOGUE",
-                        false,
-                        false,
-                        None,
-                        vec!["innkeeper"],
-                    ),
-                )
-            }
-        }
-        _ => (
+    if state.player.location_id != "ruins_entrance" {
+        return (
             Vec::new(),
             result(false, "NO_NPC_TO_TALK", false, false, None, vec!["no_npc"]),
-        ),
+        );
     }
-}
 
-fn resolve_investigate(state: &GameState) -> (Vec<Event>, EngineResult) {
-    let stage = state.quests.murder_case.stage;
-    match state.player.location_id.as_str() {
-        "village_square" if stage == 0 => (
+    if !state.has_flag("met_caretaker") {
+        (
             vec![
-                Event::AddPlayerFlag("found_blood_mark".to_string()),
-                Event::QuestStageSet {
-                    quest_id: "murder_case".to_string(),
-                    stage: 1,
+                Event::AddPlayerFlag("met_caretaker".to_string()),
+                Event::AffinityDelta {
+                    npc_id: "caretaker".to_string(),
+                    delta: 2,
                 },
             ],
             result(
                 true,
-                "BLOOD_MARK_FOUND",
+                "CARETAKER_BRIEFING",
                 false,
-                true,
+                false,
                 None,
-                vec!["blood_mark"],
+                vec!["caretaker", "briefing"],
             ),
-        ),
-        "village_warehouse" if stage <= 2 => (
+        )
+    } else {
+        (
+            Vec::new(),
+            result(
+                true,
+                "CARETAKER_WARNING",
+                false,
+                false,
+                None,
+                vec!["caretaker", "warning"],
+            ),
+        )
+    }
+}
+
+fn resolve_investigate(state: &GameState) -> (Vec<Event>, EngineResult) {
+    let stage = state.quests.sunken_ruins.stage;
+    match state.player.location_id.as_str() {
+        "ruins_entrance" if stage == 0 => (
             vec![
-                Event::AddPlayerFlag("found_bloody_cloth".to_string()),
+                Event::AddPlayerFlag("found_entrance_rune".to_string()),
                 Event::QuestStageSet {
-                    quest_id: "murder_case".to_string(),
+                    quest_id: "sunken_ruins".to_string(),
+                    stage: 1,
+                },
+            ],
+            result(true, "RUNE_FOUND", false, true, None, vec!["entrance_rune"]),
+        ),
+        "collapsed_hall" if stage <= 1 => (
+            vec![
+                Event::AddPlayerFlag("hall_mapped".to_string()),
+                Event::QuestStageSet {
+                    quest_id: "sunken_ruins".to_string(),
                     stage: 2,
                 },
             ],
             result(
                 true,
-                "BLOODY_CLOTH_FOUND",
+                "PASSAGE_OPENED",
                 false,
-                stage != 2,
+                true,
                 None,
-                vec!["bloody_cloth"],
+                vec!["hall_route"],
             ),
         ),
-        "dark_alley" if stage >= 3 && stage < 4 => (
+        "trap_chamber" if stage <= 2 => (
             vec![
-                Event::AddPlayerFlag("saw_shadow_in_alley".to_string()),
+                Event::AddPlayerFlag("trap_pattern_known".to_string()),
                 Event::QuestStageSet {
-                    quest_id: "murder_case".to_string(),
+                    quest_id: "sunken_ruins".to_string(),
+                    stage: 3,
+                },
+            ],
+            result(
+                true,
+                "TRAP_REVEALED",
+                false,
+                true,
+                None,
+                vec!["trap_pattern"],
+            ),
+        ),
+        "buried_sanctum" if stage == 3 => (
+            vec![
+                Event::AddPlayerFlag("altar_unsealed".to_string()),
+                Event::QuestStageSet {
+                    quest_id: "sunken_ruins".to_string(),
                     stage: 4,
                 },
             ],
-            result(
-                true,
-                "SHADOW_TRACKED",
-                false,
-                true,
-                None,
-                vec!["shadow", "quest_advanced"],
-            ),
+            result(true, "SEAL_BROKEN", false, true, None, vec!["altar"]),
         ),
-        "crooked_tavern" if stage >= 5 => (
+        "buried_sanctum" if stage == 4 => (
             vec![
-                Event::AddPlayerFlag("case_closed".to_string()),
+                Event::AddPlayerFlag("took_relic".to_string()),
                 Event::QuestStageSet {
-                    quest_id: "murder_case".to_string(),
+                    quest_id: "sunken_ruins".to_string(),
+                    stage: 5,
+                },
+                Event::GoldDelta(35),
+            ],
+            result(true, "RELIC_SECURED", false, true, None, vec!["relic"]),
+        ),
+        "ruins_entrance" if stage >= 5 && state.has_flag("took_relic") => (
+            vec![
+                Event::AddPlayerFlag("returned_with_relic".to_string()),
+                Event::QuestStageSet {
+                    quest_id: "sunken_ruins".to_string(),
                     stage: 6,
                 },
-                Event::GoldDelta(30),
             ],
             result(
                 true,
-                "GOOD_END_UNLOCKED",
+                "RELIC_RECOVERED",
                 false,
                 true,
-                Some("truth_revealed".to_string()),
+                Some("relic_recovered".to_string()),
                 vec!["ending_good"],
             ),
         ),
@@ -431,37 +401,35 @@ fn resolve_use_item(state: &GameState, target: Option<&str>) -> (Vec<Event>, Eng
 }
 
 fn resolve_flee(state: &GameState) -> (Vec<Event>, EngineResult) {
-    if state.quests.murder_case.stage >= 4 {
-        (
-            vec![
-                Event::AddPlayerFlag("coward_ending".to_string()),
-                Event::QuestStageSet {
-                    quest_id: "murder_case".to_string(),
-                    stage: 99,
-                },
-            ],
-            result(
-                true,
-                "BAD_END_FLEE",
-                false,
-                true,
-                Some("cowardice".to_string()),
-                vec!["ending_bad"],
-            ),
-        )
+    let ending = if state.has_flag("took_relic") {
+        "retreated_alive"
+    } else if state.player.location_id == "buried_sanctum" && state.quests.sunken_ruins.stage >= 4 {
+        "greed_awakened"
     } else {
-        (
-            Vec::new(),
-            result(
-                false,
-                "FLEE_TOO_EARLY",
-                false,
-                false,
-                None,
-                vec!["flee_blocked"],
-            ),
-        )
-    }
+        "retreated_alive"
+    };
+
+    (
+        vec![
+            Event::AddPlayerFlag("retreated_from_ruins".to_string()),
+            Event::QuestStageSet {
+                quest_id: "sunken_ruins".to_string(),
+                stage: 99,
+            },
+        ],
+        result(
+            true,
+            if ending == "greed_awakened" {
+                "CURSE_TRIGGERED"
+            } else {
+                "RETREAT_END"
+            },
+            false,
+            true,
+            Some(ending.to_string()),
+            vec!["retreat"],
+        ),
+    )
 }
 
 fn result(
@@ -509,18 +477,21 @@ mod tests {
     }
 
     #[test]
-    fn murder_case_can_reach_good_ending() {
+    fn relic_can_be_recovered() {
         let content = ContentBundle::load_from_disk(repo_content_root()).expect("content");
         let mut state = initial_state();
         let steps = [
             "주변을 조사한다",
-            "창고로 이동한다",
+            "회랑으로 이동한다",
             "주변을 조사한다",
-            "아리아와 대화한다",
-            "골목으로 이동한다",
+            "함정방으로 이동한다",
             "주변을 조사한다",
-            "여관으로 이동한다",
-            "아리아와 대화한다",
+            "성소로 이동한다",
+            "주변을 조사한다",
+            "주변을 조사한다",
+            "함정방으로 이동한다",
+            "회랑으로 이동한다",
+            "입구로 이동한다",
             "주변을 조사한다",
         ];
 
@@ -528,8 +499,12 @@ mod tests {
             state = resolve_text_action(&state, &content, step).next_state;
         }
 
-        assert_eq!(state.quests.murder_case.stage, 6);
-        assert!(state.player.flags.iter().any(|flag| flag == "case_closed"));
+        assert_eq!(state.quests.sunken_ruins.stage, 6);
+        assert!(state
+            .player
+            .flags
+            .iter()
+            .any(|flag| flag == "returned_with_relic"));
     }
 
     fn repo_content_root() -> std::path::PathBuf {

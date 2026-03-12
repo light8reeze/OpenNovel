@@ -36,7 +36,7 @@ pub struct QuestDefinition {
 pub struct ContentBundle {
     pub locations: Vec<Location>,
     pub npcs: Vec<Npc>,
-    pub murder_case: QuestDefinition,
+    pub sunken_ruins: QuestDefinition,
 }
 
 impl ContentBundle {
@@ -44,7 +44,8 @@ impl ContentBundle {
         let root = root.as_ref();
         let locations: Vec<Location> = read_json(root.join("locations.json"))?;
         let npcs: Vec<Npc> = read_json(root.join("npcs.json"))?;
-        let murder_case: QuestDefinition = read_json(root.join("quests").join("murder_case.json"))?;
+        let sunken_ruins: QuestDefinition =
+            read_json(root.join("quests").join("sunken_ruins.json"))?;
 
         for location in &locations {
             for connection in &location.connections {
@@ -75,7 +76,7 @@ impl ContentBundle {
         Ok(Self {
             locations,
             npcs,
-            murder_case,
+            sunken_ruins,
         })
     }
 
@@ -104,8 +105,8 @@ mod tests {
     fn content_loads_from_repo_files() {
         let bundle = ContentBundle::load_from_disk(repo_content_root()).expect("content loads");
         assert!(bundle.locations.len() >= 3);
-        assert!(bundle.npcs.iter().any(|npc| npc.id == "aria"));
-        assert_eq!(bundle.murder_case.id, "murder_case");
+        assert!(bundle.npcs.iter().any(|npc| npc.id == "caretaker"));
+        assert_eq!(bundle.sunken_ruins.id, "sunken_ruins");
     }
 
     fn repo_content_root() -> std::path::PathBuf {

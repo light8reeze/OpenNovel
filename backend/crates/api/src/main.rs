@@ -91,7 +91,7 @@ async fn run_demo(service: Arc<GameSessionService>) {
             "[turn {}] code={} stage={} narrative={}",
             index,
             turn.engine_result.message_code,
-            turn.state.quests.murder_case.stage,
+            turn.state.quests.sunken_ruins.stage,
             turn.narrative
         );
     }

@@ -12,7 +12,7 @@ def test_start_game_returns_rust_compatible_shape() -> None:
     payload = response.json()
     assert payload["sessionId"].startswith("session-")
     assert payload["state"]["meta"]["turn"] == 0
-    assert payload["choices"] == ["주변을 조사한다", "창고로 이동한다", "아리아와 대화한다"]
+    assert payload["choices"] == ["주변을 조사한다", "관리인과 대화한다", "회랑으로 이동한다"]
 
 
 def test_game_state_returns_404_for_unknown_session() -> None:
@@ -42,13 +42,16 @@ def test_good_ending_path_matches_rust_demo() -> None:
 
     for step in [
         "주변을 조사한다",
-        "창고로 이동한다",
+        "회랑으로 이동한다",
         "주변을 조사한다",
-        "아리아와 대화한다",
-        "골목으로 이동한다",
+        "함정방으로 이동한다",
         "주변을 조사한다",
-        "여관으로 이동한다",
-        "아리아와 대화한다",
+        "성소로 이동한다",
+        "주변을 조사한다",
+        "주변을 조사한다",
+        "함정방으로 이동한다",
+        "회랑으로 돌아간다",
+        "입구로 돌아간다",
         "주변을 조사한다",
     ]:
         response = client.post("/game/action", json={"sessionId": session_id, "inputText": step})
@@ -57,20 +60,23 @@ def test_good_ending_path_matches_rust_demo() -> None:
         message_codes.append(payload["engineResult"]["message_code"])
 
     assert message_codes == [
-        "BLOOD_MARK_FOUND",
+        "RUNE_FOUND",
         "MOVE_OK",
-        "BLOODY_CLOTH_FOUND",
-        "ARIA_CLUE_CONFIRMED",
+        "PASSAGE_OPENED",
         "MOVE_OK",
-        "SHADOW_TRACKED",
+        "TRAP_REVEALED",
         "MOVE_OK",
-        "INNKEEPER_TESTIMONY",
-        "GOOD_END_UNLOCKED",
+        "SEAL_BROKEN",
+        "RELIC_SECURED",
+        "MOVE_OK",
+        "MOVE_OK",
+        "MOVE_OK",
+        "RELIC_RECOVERED",
     ]
     final_state = payload["state"]
-    assert final_state["quests"]["murder_case"]["stage"] == 6
+    assert final_state["quests"]["sunken_ruins"]["stage"] == 6
     assert final_state["player"]["gold"] == 50
-    assert payload["engineResult"]["ending_reached"] == "truth_revealed"
+    assert payload["engineResult"]["ending_reached"] == "relic_recovered"
 
 
 def test_frontend_shell_is_served_from_agent() -> None:

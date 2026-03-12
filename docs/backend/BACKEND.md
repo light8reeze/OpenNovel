@@ -5,7 +5,7 @@ OpenNovel Backend — Codex Development Guide
 이 프로젝트는 **OpenNovel**, AI 기반 인터랙티브 소설 플레이 서비스이다.
 
 플레이어는 채팅 인터페이스를 통해 소설 속 주인공이 되어 행동을 선택하며,
-LLM은 게임 마스터(GM) 역할을 수행하여 세계 상태와 스토리를 생성한다.
+LLM은 플레이어 입력 보조 해석과 장면 서술 역할을 수행한다.
 
 ### Core Concept
 
@@ -23,8 +23,8 @@ Player Input → Game Engine → World State Update → LLM Narrative → Respon
 
 2. **LLM Story Generator**
 
-   * 현재 상태 기반 스토리 생성
-   * 플레이어 행동을 narrative로 변환
+   * 현재 상태 기반 장면 서술 생성
+   * 플레이어 행동 입력을 action candidate로 정규화
 
 3. **Session Manager**
 

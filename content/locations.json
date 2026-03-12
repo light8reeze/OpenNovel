@@ -1,26 +1,26 @@
 [
   {
-    "id": "village_square",
-    "name": "Village Square",
-    "description": "A damp square lit by dying lanterns.",
-    "connections": ["village_warehouse", "crooked_tavern"]
+    "id": "ruins_entrance",
+    "name": "Ruins Entrance",
+    "description": "A cracked stairway descends beneath a broken arch wrapped in cold mist.",
+    "connections": ["collapsed_hall"]
   },
   {
-    "id": "village_warehouse",
-    "name": "Village Warehouse",
-    "description": "A shuttered warehouse that smells of rust and rain.",
-    "connections": ["village_square", "dark_alley"]
+    "id": "collapsed_hall",
+    "name": "Collapsed Hall",
+    "description": "A fractured corridor where damp stone and broken pillars swallow the torchlight.",
+    "connections": ["ruins_entrance", "trap_chamber"]
   },
   {
-    "id": "dark_alley",
-    "name": "Dark Alley",
-    "description": "A narrow lane where footsteps echo too long.",
-    "connections": ["village_warehouse", "crooked_tavern"]
+    "id": "trap_chamber",
+    "name": "Trap Chamber",
+    "description": "Dust-covered tiles and old rune grooves hint that the room still remembers its purpose.",
+    "connections": ["collapsed_hall", "buried_sanctum"]
   },
   {
-    "id": "crooked_tavern",
-    "name": "Crooked Tavern",
-    "description": "A noisy tavern trying too hard to feel safe.",
-    "connections": ["village_square", "dark_alley"]
+    "id": "buried_sanctum",
+    "name": "Buried Sanctum",
+    "description": "A silent chamber shelters a sealed altar beneath layers of ash and age.",
+    "connections": ["trap_chamber"]
   }
 ]

@@ -2,21 +2,21 @@
   {
     "id": "intender-action-investigate",
     "role": "intender",
-    "text": "살펴본다, 조사한다, 흔적을 찾는다 같은 표현은 INVESTIGATE에 가깝다.",
+    "text": "살펴본다, 조사한다, 문양을 확인한다, 흔적을 찾는다는 INVESTIGATE에 가깝다.",
     "visibility": "player",
     "tags": ["investigate", "synonym"]
   },
   {
     "id": "intender-action-talk",
     "role": "intender",
-    "text": "대화한다, 말을 건다, 물어본다는 TALK에 가깝다. 아리아가 장면에 있으면 target은 aria가 될 수 있다.",
+    "text": "관리인과 대화한다, 말을 건다, 물어본다는 TALK target caretaker에 가깝다.",
     "visibility": "player",
-    "tags": ["talk", "synonym", "aria"]
+    "tags": ["talk", "synonym", "caretaker"]
   },
   {
     "id": "intender-action-item",
     "role": "intender",
-    "text": "횃불을 켠다, torch를 쓴다는 USE_ITEM target torch에 가깝다.",
+    "text": "횃불을 켠다, torch를 든다는 USE_ITEM target torch에 가깝다.",
     "visibility": "player",
     "tags": ["use_item", "torch"]
   }

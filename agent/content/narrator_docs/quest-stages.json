@@ -1,20 +1,20 @@
 [
   {
-    "id": "narrator-quest-blood-mark",
+    "id": "narrator-quest-early",
     "role": "narrator",
-    "text": "초반 조사 단계에서는 살인 사건의 공포보다 불길한 흔적의 발견을 앞세운다.",
-    "quest_id": "murder_case",
+    "text": "초반 탐험은 낯선 유적의 압박감과 봉인의 흔적을 강조한다.",
+    "quest_id": "sunken_ruins",
     "stage_min": 0,
     "stage_max": 2,
     "visibility": "player",
     "tags": ["quest", "early", "tone"]
   },
   {
-    "id": "narrator-quest-reveal",
+    "id": "narrator-quest-late",
     "role": "narrator",
-    "text": "후반 단계에서는 흩어진 단서가 하나로 모이는 긴장과 확신을 강조한다.",
-    "quest_id": "murder_case",
-    "stage_min": 4,
+    "text": "후반 탐험은 유물의 존재감과 되돌아가야 한다는 긴장을 강조한다.",
+    "quest_id": "sunken_ruins",
+    "stage_min": 3,
     "stage_max": 6,
     "visibility": "player",
     "tags": ["quest", "late", "tone"]

@@ -20,20 +20,20 @@ def test_intent_validation_returns_action() -> None:
     response = client.post(
         "/intent/validate",
         json={
-            "player_input": "창고로 이동한다",
+            "player_input": "회랑으로 이동한다",
             "allowed_actions": ["MOVE", "INVESTIGATE"],
             "state_summary": {
                 "turn": 0,
-                "location_id": "village_square",
+                "location_id": "ruins_entrance",
                 "hp": 100,
-                "gold": 20,
-                "murder_case_stage": 0,
+                "gold": 15,
+                "sunken_ruins_stage": 0,
                 "player_flags": [],
             },
             "scene_context": {
-                "location_name": "Village Square",
-                "npcs_in_scene": ["aria"],
-                "visible_targets": ["warehouse", "aria"],
+                "location_name": "Sunken Ruins Entrance",
+                "npcs_in_scene": ["caretaker"],
+                "visible_targets": ["hall", "caretaker"],
             },
         },
     )
@@ -49,29 +49,29 @@ def test_turn_narrative_returns_allowed_choices() -> None:
         json={
             "state_summary": {
                 "turn": 1,
-                "location_id": "village_warehouse",
+                "location_id": "collapsed_hall",
                 "hp": 100,
-                "gold": 20,
-                "murder_case_stage": 1,
+                "gold": 15,
+                "sunken_ruins_stage": 2,
                 "player_flags": [],
             },
             "scene_context": {
-                "location_name": "Village Warehouse",
-                "npcs_in_scene": ["aria"],
-                "visible_targets": ["aria", "village_square"],
+                "location_name": "Collapsed Hall",
+                "npcs_in_scene": [],
+                "visible_targets": ["trap_room", "ruins_entrance"],
             },
             "engine_result": {
                 "success": True,
-                "message_code": "BLOODY_CLOTH_FOUND",
+                "message_code": "PASSAGE_OPENED",
                 "location_changed": False,
                 "quest_stage_changed": True,
                 "ending_reached": None,
-                "details": ["bloody_cloth"],
+                "details": ["passage"],
             },
             "allowed_choices": [
                 "주변을 조사한다",
-                "아리아와 대화한다",
-                "광장으로 이동한다",
+                "함정방으로 이동한다",
+                "입구로 돌아간다",
             ],
         },
     )

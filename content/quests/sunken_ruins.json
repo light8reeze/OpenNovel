@@ -1,0 +1,15 @@
+{
+  "id": "sunken_ruins",
+  "title": "The Relic Below",
+  "stages": [
+    { "stage": 0, "summary": "You arrive at the ruined stairway before the buried sanctum." },
+    { "stage": 1, "summary": "A weathered rune at the entrance hints that the seal can still be opened." },
+    { "stage": 2, "summary": "You mapped the collapsed hall and found the safe route deeper inside." },
+    { "stage": 3, "summary": "The trap chamber revealed the pattern needed to cross the old defenses." },
+    { "stage": 4, "summary": "The altar seal has been broken and the relic is within reach." },
+    { "stage": 5, "summary": "You secured the relic, but the ruin feels ready to swallow everything." },
+    { "stage": 6, "summary": "You returned from the ruins with the relic intact." },
+    { "stage": 99, "summary": "You left the ruins before the expedition could truly be completed." }
+  ],
+  "endings": ["relic_recovered", "greed_awakened", "retreated_alive"]
+}

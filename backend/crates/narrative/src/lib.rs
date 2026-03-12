@@ -68,7 +68,7 @@ pub struct NarrativeTurn {
 pub fn opening_narrative(state: &GameState, content: &ContentBundle) -> (String, Vec<String>) {
     let location = content.location_name(&state.player.location_id);
     let narrative = format!(
-        "{}. 축축한 밤공기 속에서 마을 광장은 숨을 죽인 채 가라앉아 있다. 먼 곳에서 누군가 서둘러 문을 닫는 소리가 들린다.",
+        "{}. 부서진 석문 아래로 찬 안개가 낮게 깔리고, 오래 잠든 유적이 숨을 참고 있는 듯한 정적이 입구를 누른다.",
         location
     );
     let choices = choices_for_state(state);
@@ -101,7 +101,7 @@ JSON 형식: {{\"narrative\":\"...\",\"choices\":[\"...\",\"...\"]}}\n\
 \n\
 톤: dark fantasy mystery, concise Korean prose.",
         state.player.location_id,
-        state.quests.murder_case.stage,
+        state.quests.sunken_ruins.stage,
         state.player.hp,
         state.player.gold,
         state.player.flags,
@@ -117,33 +117,22 @@ pub fn render_turn(
 ) -> (String, Vec<String>) {
     let location = content.location_name(&state.player.location_id);
     let narrative = match engine_result.message_code.as_str() {
-        "MOVE_OK" => format!("당신은 조심스럽게 {} 쪽으로 발걸음을 옮긴다.", location),
-        "BLOOD_MARK_FOUND" => {
-            "젖은 돌바닥 틈에서 마르다 만 핏자국이 길게 이어진다. 흔적은 창고 방향을 가리킨다.".to_string()
-        }
-        "BLOODY_CLOTH_FOUND" => {
-            "낡은 상자 틈에서 피가 눌어붙은 천 조각이 나온다. 누군가 급히 숨긴 흔적이다.".to_string()
-        }
-        "ARIA_CLUE_CONFIRMED" => {
-            "아리아는 천 조각을 보자 짧게 숨을 삼킨다. 그녀는 골목에서 검은 망토를 본 적이 있다고 털어놓는다.".to_string()
-        }
-        "SHADOW_TRACKED" => {
-            "골목의 진흙 바닥에 깊은 장화 자국이 남아 있다. 흔적은 여관 뒤편으로 이어진다.".to_string()
-        }
-        "INNKEEPER_TESTIMONY" => {
-            "여관 주인은 한참을 망설이다가, 늦은 밤 피 묻은 남자가 뒷문으로 들어왔다고 말한다.".to_string()
-        }
-        "GOOD_END_UNLOCKED" => {
-            "엉켜 있던 진실이 마침내 하나로 모인다. 마을 사람들은 살인 사건의 진범이 드러났다는 소식에 술렁인다.".to_string()
-        }
-        "BAD_END_FLEE" => {
-            "당신은 등을 돌린다. 사건은 미궁으로 빠지고, 마을에는 더 짙은 불신만 남는다.".to_string()
-        }
-        "NOTHING_FOUND" => "눈에 띄는 변화는 없다. 하지만 침묵이 오히려 불길하게 느껴진다.".to_string(),
-        "NO_USEFUL_DIALOGUE" => "상대는 말을 아낀다. 지금은 더 구체적인 단서가 필요하다.".to_string(),
+        "MOVE_OK" => format!("당신은 무너진 돌무더기를 넘어서며 {} 쪽으로 조심스럽게 나아간다.", location),
+        "RUNE_FOUND" => "입구의 닳은 문양 아래에서 아직 식지 않은 봉인의 흔적이 드러난다. 유적은 완전히 죽지 않았다.".to_string(),
+        "PASSAGE_OPENED" => "무너진 회랑의 잔해를 살피자 안전한 발판이 드러나며, 더 깊은 길이 서서히 윤곽을 드러낸다.".to_string(),
+        "TRAP_REVEALED" => "함정방 바닥의 금이 간 문양들이 하나의 패턴으로 이어진다. 이제 무엇을 밟아야 할지 분명해진다.".to_string(),
+        "SEAL_BROKEN" => "제단을 감싸던 오래된 봉인이 낮게 울리며 갈라진다. 안쪽에서 차갑고 무거운 공기가 새어 나온다.".to_string(),
+        "RELIC_SECURED" => "먼지에 잠들어 있던 유물을 손에 쥐는 순간, 방 안의 정적이 얇게 흔들린다. 오래된 감시가 깨어나는 듯하다.".to_string(),
+        "RELIC_RECOVERED" => "당신은 무사히 폐허 밖으로 돌아와 유물을 품에 안는다. 밤공기는 여전히 차갑지만, 탐험은 끝을 얻었다.".to_string(),
+        "CURSE_TRIGGERED" => "당신이 등을 돌리는 순간 성소 깊은 곳에서 낮은 진동이 번진다. 유적은 마지막으로 자신의 주인을 기억해낸다.".to_string(),
+        "RETREAT_END" => "당신은 더 깊이 들어가기를 포기하고 폐허를 빠져나온다. 유물은 남았지만, 적어도 목숨은 건졌다.".to_string(),
+        "CARETAKER_BRIEFING" => "관리인은 돌계단 아래를 바라본 채, 오래된 봉인이 아직 깨어날 준비를 하고 있다고 낮게 경고한다.".to_string(),
+        "CARETAKER_WARNING" => "관리인은 이미 충분히 말해 주었다는 듯 짧게 고개를 끄덕일 뿐이다. 더 아래는 스스로 감당해야 한다.".to_string(),
+        "NOTHING_FOUND" => "눈에 띄는 변화는 없다. 다만 고요함이 깊어질수록 유적의 숨소리 같은 착각이 또렷해진다.".to_string(),
+        "NO_USEFUL_DIALOGUE" => "대답 대신 메아리만 돌아온다. 이곳에서는 돌과 어둠이 더 많은 것을 기억하고 있다.".to_string(),
         "REST_OK" => "잠시 숨을 고르자 식어가던 감각이 조금 되살아난다.".to_string(),
         "TORCH_LIT" => "횃불 끝에서 불씨가 살아나며 주변의 어둠을 밀어낸다.".to_string(),
-        _ if engine_result.success => "상황은 움직였지만 아직 모든 퍼즐이 맞춰진 것은 아니다.".to_string(),
+        _ if engine_result.success => "상황은 움직였지만 유적은 아직 가장 깊은 곳의 비밀을 내주지 않았다.".to_string(),
         _ => "시도는 헛돌았다. 다른 접근이 필요하다.".to_string(),
     };
 
@@ -183,7 +172,7 @@ JSON 형식: {{\"narrative\":\"...\",\"choices\":[\"...\",\"...\"]}}\n\
 \n\
 톤: dark fantasy mystery, concise Korean prose.",
         state.player.location_id,
-        state.quests.murder_case.stage,
+        state.quests.sunken_ruins.stage,
         state.player.hp,
         state.player.gold,
         state.player.flags,
@@ -198,30 +187,27 @@ JSON 형식: {{\"narrative\":\"...\",\"choices\":[\"...\",\"...\"]}}\n\
 
 pub fn choices_for_state(state: &GameState) -> Vec<String> {
     match state.player.location_id.as_str() {
-        "village_square" => vec![
+        "ruins_entrance" => vec![
             "주변을 조사한다".to_string(),
-            "창고로 이동한다".to_string(),
-            "아리아와 대화한다".to_string(),
+            "관리인과 대화한다".to_string(),
+            "회랑으로 이동한다".to_string(),
         ],
-        "village_warehouse" => vec![
+        "collapsed_hall" => vec![
             "주변을 조사한다".to_string(),
-            "아리아와 대화한다".to_string(),
-            "광장으로 이동한다".to_string(),
+            "함정방으로 이동한다".to_string(),
+            "입구로 이동한다".to_string(),
         ],
-        "dark_alley" => vec![
+        "trap_chamber" => vec![
             "주변을 조사한다".to_string(),
-            "여관으로 이동한다".to_string(),
-            "도망친다".to_string(),
+            "성소로 이동한다".to_string(),
+            "회랑으로 이동한다".to_string(),
         ],
-        "crooked_tavern" => vec![
-            "아리아와 대화한다".to_string(),
+        "buried_sanctum" => vec![
             "주변을 조사한다".to_string(),
-            "광장으로 이동한다".to_string(),
+            "함정방으로 이동한다".to_string(),
+            "후퇴한다".to_string(),
         ],
-        _ => vec![
-            "주변을 조사한다".to_string(),
-            "광장으로 이동한다".to_string(),
-        ],
+        _ => vec!["주변을 조사한다".to_string(), "입구로 이동한다".to_string()],
     }
 }
 

@@ -1,20 +1,8 @@
 [
   {
-    "id": "aria",
-    "name": "Aria",
-    "location_id": "village_square",
-    "role": "witness"
-  },
-  {
-    "id": "innkeeper",
-    "name": "Innkeeper",
-    "location_id": "crooked_tavern",
-    "role": "informant"
-  },
-  {
-    "id": "guard",
-    "name": "Night Guard",
-    "location_id": "village_square",
-    "role": "authority"
+    "id": "caretaker",
+    "name": "Ruins Caretaker",
+    "location_id": "ruins_entrance",
+    "role": "guide"
   }
 ]
