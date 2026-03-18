@@ -31,11 +31,37 @@
           <button type="submit">전송</button>
         </form>
       </section>
-      <aside class="state-panel">
-        <p class="eyebrow">State</p>
-        <div id="state"></div>
+      <aside class="side-panel">
+        <section class="state-panel">
+          <p class="eyebrow">State</p>
+          <div id="state"></div>
+        </section>
+        <section class="graph-panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Story Graph</p>
+              <h2>턴 흐름도</h2>
+            </div>
+            <p id="graph-mode" class="panel-meta">Debug logs off</p>
+          </div>
+          <div class="graph-frame">
+            <div id="graph" class="graph"></div>
+            <aside id="graph-hover" class="graph-hover hidden"></aside>
+          </div>
+        </section>
+        <section class="detail-panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Turn Detail</p>
+              <h2>선택한 노드</h2>
+            </div>
+          </div>
+          <div id="turn-detail" class="turn-detail empty">
+            노드를 클릭하면 해당 턴의 입력, 결과, 서술이 표시됩니다.
+          </div>
+        </section>
       </aside>
     </main>
     <script src="/frontend/app.js"></script>
   </body>
-  </html>
+</html>

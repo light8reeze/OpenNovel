@@ -24,20 +24,27 @@ body {
 }
 
 .shell {
-  width: min(1120px, calc(100% - 32px));
+  width: min(1380px, calc(100% - 32px));
   margin: 24px auto;
   display: grid;
-  grid-template-columns: 2fr 1fr;
+  grid-template-columns: minmax(0, 1.65fr) minmax(340px, 0.95fr);
   gap: 20px;
 }
 
 .story-panel,
-.state-panel {
+.state-panel,
+.graph-panel,
+.detail-panel {
   background: linear-gradient(180deg, rgba(23, 28, 32, 0.96), rgba(15, 18, 20, 0.96));
   border: 1px solid var(--line);
   border-radius: 20px;
   padding: 20px;
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.28);
+}
+
+.side-panel {
+  display: grid;
+  gap: 20px;
 }
 
 .story-header {
@@ -64,6 +71,11 @@ body {
 h1 {
   margin: 0;
   font-size: clamp(28px, 4vw, 46px);
+}
+
+h2 {
+  margin: 0;
+  font-size: 20px;
 }
 
 .log {
@@ -136,6 +148,211 @@ input {
   min-width: min(280px, 40vw);
 }
 
+.panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.panel-meta {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.graph-frame {
+  position: relative;
+}
+
+.graph {
+  overflow-x: auto;
+  padding-bottom: 6px;
+}
+
+.graph-empty {
+  margin: 0;
+  min-height: 160px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  border: 1px dashed var(--line);
+  border-radius: 18px;
+}
+
+.graph-svg {
+  width: 100%;
+  min-height: 220px;
+  display: block;
+}
+
+.graph-link {
+  stroke: rgba(243, 239, 230, 0.16);
+  stroke-width: 2;
+}
+
+.graph-node {
+  cursor: pointer;
+}
+
+.graph-circle {
+  stroke: rgba(243, 239, 230, 0.16);
+  stroke-width: 2;
+  transition:
+    transform 120ms ease,
+    fill 120ms ease,
+    stroke 120ms ease;
+}
+
+.graph-node:hover .graph-circle,
+.graph-node.is-selected .graph-circle {
+  transform: scale(1.06);
+  stroke: rgba(243, 239, 230, 0.45);
+}
+
+.graph-circle.tone-opening {
+  fill: rgba(194, 77, 61, 0.3);
+}
+
+.graph-circle.tone-move {
+  fill: rgba(214, 159, 78, 0.28);
+}
+
+.graph-circle.tone-item {
+  fill: rgba(107, 160, 109, 0.28);
+}
+
+.graph-circle.tone-neutral {
+  fill: rgba(255, 255, 255, 0.1);
+}
+
+.graph-turn,
+.graph-label,
+.graph-sublabel {
+  fill: var(--text);
+  pointer-events: none;
+}
+
+.graph-turn {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.graph-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.graph-sublabel {
+  font-size: 10px;
+  fill: var(--muted);
+}
+
+.graph-hover {
+  position: absolute;
+  z-index: 3;
+  width: min(360px, calc(100vw - 48px));
+  max-height: 420px;
+  overflow: auto;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(243, 239, 230, 0.2);
+  background: rgba(10, 12, 13, 0.97);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+}
+
+.graph-hover.hidden {
+  display: none;
+}
+
+.hover-title,
+.hover-label {
+  margin: 0 0 8px;
+}
+
+.hover-title {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.hover-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+}
+
+.hover-copy {
+  margin: 0;
+  color: var(--muted);
+}
+
+.hover-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 12px;
+  margin: 0 0 12px;
+}
+
+.hover-grid dt {
+  color: var(--muted);
+}
+
+.hover-grid dd {
+  margin: 0;
+  word-break: break-word;
+}
+
+.hover-block {
+  margin-top: 12px;
+}
+
+.hover-block pre {
+  margin: 0;
+  padding: 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(243, 239, 230, 0.08);
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1.45;
+  overflow: auto;
+}
+
+.turn-detail.empty {
+  color: var(--muted);
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.detail-block + .detail-block {
+  margin-top: 14px;
+}
+
+.detail-label {
+  margin: 0 0 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.detail-value,
+.detail-copy {
+  margin: 0;
+}
+
+.detail-copy {
+  line-height: 1.6;
+}
+
 dl {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -164,5 +381,15 @@ dd {
 
   #gemini-key {
     min-width: 0;
+  }
+
+  .graph-hover {
+    position: static;
+    width: 100%;
+    margin-top: 12px;
+  }
+
+  .detail-grid {
+    grid-template-columns: 1fr 1fr;
   }
 }

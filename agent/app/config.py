@@ -42,10 +42,12 @@ class Settings:
     narrator: RoleModelSettings
     vector_store: VectorStoreSettings
     embedding: EmbeddingSettings
+    debug_ui_enabled: bool
 
 
 def load_settings() -> Settings:
     root = Path(__file__).resolve().parents[1]
+    environment = _env("OPENNOVEL_ENV", "development").lower()
     return Settings(
         intender=_load_role_settings("INTENDER", default_model="gpt-4.1-mini"),
         narrator=_load_role_settings("NARRATOR", default_model="gpt-4.1-mini"),
@@ -62,6 +64,11 @@ def load_settings() -> Settings:
             model=_env("AGENT_EMBEDDING_MODEL", "local-hash-v1"),
             dimensions=int(_env("AGENT_EMBEDDING_DIMENSIONS", "64")),
         ),
+        debug_ui_enabled=_env(
+            "OPENNOVEL_DEBUG_UI",
+            "true" if environment != "production" else "false",
+        ).lower()
+        in {"1", "true", "yes"},
     )
 
 

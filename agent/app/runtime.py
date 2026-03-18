@@ -103,6 +103,7 @@ class AgentRuntime:
             "game": {
                 "runtimeError": self._game_error,
             },
+            "debugUiEnabled": self.settings.debug_ui_enabled,
         }
 
 

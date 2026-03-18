@@ -85,4 +85,36 @@ def test_frontend_shell_is_served_from_agent() -> None:
     assert index.status_code == 200
     assert "OpenNovel MVP" in index.text
     assert script.status_code == 200
-    assert "startGame" in script.text
+    assert "renderGraph" in script.text
+
+
+def test_debug_turn_log_returns_opening_and_turn_bundles() -> None:
+    start = client.post("/game/start", json={}).json()
+    session_id = start["sessionId"]
+
+    opening_log = client.get("/debug/turn-log", params={"sessionId": session_id, "turn": 0})
+    assert opening_log.status_code == 200
+    opening_payload = opening_log.json()
+    assert opening_payload["found"] is True
+    assert opening_payload["gameResponse"]["sessionId"] == session_id
+    assert opening_payload["narrativeResponse"]["narrative"]
+
+    action = client.post(
+        "/game/action",
+        json={"sessionId": session_id, "inputText": "회랑으로 이동한다"},
+    ).json()
+    turn_log = client.get("/debug/turn-log", params={"sessionId": session_id, "turn": 1})
+    assert turn_log.status_code == 200
+    turn_payload = turn_log.json()
+    assert turn_payload["found"] is True
+    assert turn_payload["gameResponse"]["engineResult"]["message_code"] == action["engineResult"]["message_code"]
+    assert turn_payload["intentResponse"]["action"]["action_type"] == "MOVE"
+    assert turn_payload["narrativeResponse"]["narrative"]
+
+
+def test_debug_turn_log_returns_empty_bundle_for_missing_turn() -> None:
+    response = client.get("/debug/turn-log", params={"sessionId": "missing-session", "turn": 99})
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["found"] is False
+    assert payload["gameRequest"] is None
