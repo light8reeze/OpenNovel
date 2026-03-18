@@ -30,7 +30,7 @@ from app.game.models import (
 from app.schemas.common import Action, SceneContext
 from app.schemas.intent import IntentValidationRequest
 from app.schemas.narrative import NarrativeRequest
-from app.services.file_logger import log_backend_request, log_game_result
+from app.services.file_logger import log_game_result, log_intent_result, log_narrative_result
 from app.services.llm_client import build_llm_client
 
 
@@ -68,11 +68,20 @@ class GameSessionService:
         session_id = f"session-{time_ns()}-{next(self.counter)}"
         state = initial_state()
         narrator = self._build_session_narrator(options)
-        turn = self._build_opening_turn(state, narrator)
+        turn = self._build_opening_turn(state, narrator, session_id=session_id)
         with self.lock:
             self.sessions[session_id] = SessionRecord(state=state, narrator=narrator)
         response = StartResponse(sessionId=session_id, narrative=turn.narrative, choices=turn.choices, state=turn.state)
-        log_game_result("/game/start", {"sessionId": session_id}, response.model_dump(mode="json", by_alias=True))
+        log_game_result(
+            "/game/start",
+            {
+                "sessionId": session_id,
+                "geminiModel": options.gemini_model,
+                "hasGeminiKey": bool(options.gemini_api_key),
+            },
+            response.model_dump(mode="json", by_alias=True),
+            context={"sessionId": session_id, "turn": 0},
+        )
         return response
 
     def apply_action(self, payload: ActionRequest) -> ActionResponse:
@@ -83,8 +92,14 @@ class GameSessionService:
                 raise SessionNotFoundError(payload.session_id)
             state = session.state
             narrator = session.narrator
-        resolution = self._resolve_player_input(state, input_text)
-        turn = self._build_turn(resolution, narrator)
+        next_turn = state.meta.turn + 1
+        resolution = self._resolve_player_input(
+            state,
+            input_text,
+            session_id=payload.session_id,
+            turn=next_turn,
+        )
+        turn = self._build_turn(resolution, narrator, session_id=payload.session_id)
         with self.lock:
             self.sessions[payload.session_id] = SessionRecord(state=turn.state, narrator=narrator)
         response = ActionResponse(
@@ -97,6 +112,7 @@ class GameSessionService:
             "/game/action",
             payload.model_dump(mode="json", by_alias=True),
             response.model_dump(mode="json", by_alias=True),
+            context={"sessionId": payload.session_id, "turn": turn.state.meta.turn},
         )
         return response
 
@@ -155,7 +171,7 @@ class GameSessionService:
             return payload.choice_text
         raise InvalidActionRequestError("one of inputText or choiceText is required")
 
-    def _resolve_player_input(self, state: GameState, input_text: str) -> Resolution:
+    def _resolve_player_input(self, state: GameState, input_text: str, session_id: str, turn: int) -> Resolution:
         request = IntentValidationRequest(
             player_input=input_text,
             allowed_actions=allowed_actions_for_state(state),
@@ -164,13 +180,19 @@ class GameSessionService:
         )
         fallback = heuristic_parse_action(input_text)
         response = self.intender.handle(request)
+        log_intent_result(
+            "/game/action",
+            request.model_dump(mode="json"),
+            response.model_dump(mode="json"),
+            context={"sessionId": session_id, "turn": turn},
+        )
         if "action_not_allowed" in response.validation_flags or "target_not_visible" in response.validation_flags:
             action = fallback
         else:
             action = Action.model_validate(response.action.model_dump(mode="json"))
         return resolve_action_input(state, self.content, action)
 
-    def _build_opening_turn(self, state: GameState, narrator: NarratorAgent) -> TurnResult:
+    def _build_opening_turn(self, state: GameState, narrator: NarratorAgent, session_id: str) -> TurnResult:
         request = NarrativeRequest(
             state_summary=state.summary(),
             scene_context=self._scene_context(state),
@@ -178,6 +200,12 @@ class GameSessionService:
             allowed_choices=choices_for_state(state),
         )
         response = narrator.render_opening(request)
+        log_narrative_result(
+            "/game/start",
+            request.model_dump(mode="json"),
+            response.model_dump(mode="json"),
+            context={"sessionId": session_id, "turn": 0},
+        )
         return TurnResult(
             narrative=response.narrative,
             choices=response.choices,
@@ -185,7 +213,7 @@ class GameSessionService:
             engine_result=self._game_started_engine_result(),
         )
 
-    def _build_turn(self, resolution: Resolution, narrator: NarratorAgent) -> TurnResult:
+    def _build_turn(self, resolution: Resolution, narrator: NarratorAgent, session_id: str) -> TurnResult:
         request = NarrativeRequest(
             state_summary=resolution.next_state.summary(),
             scene_context=self._scene_context(resolution.next_state),
@@ -193,6 +221,12 @@ class GameSessionService:
             allowed_choices=choices_for_state(resolution.next_state),
         )
         response = narrator.render_turn(request)
+        log_narrative_result(
+            "/game/action",
+            request.model_dump(mode="json"),
+            response.model_dump(mode="json"),
+            context={"sessionId": session_id, "turn": resolution.next_state.meta.turn},
+        )
         return TurnResult(
             narrative=response.narrative,
             choices=response.choices,

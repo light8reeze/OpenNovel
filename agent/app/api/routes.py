@@ -9,7 +9,12 @@ from app.runtime import get_runtime
 from app.runtime import frontend_root
 from app.schemas.intent import IntentValidationRequest, IntentValidationResponse
 from app.schemas.narrative import NarrativeRequest, NarrativeResponse
-from app.services.file_logger import log_backend_request, log_intent_result, log_narrative_result
+from app.services.file_logger import (
+    load_turn_log_bundle,
+    log_backend_request,
+    log_intent_result,
+    log_narrative_result,
+)
 
 router = APIRouter()
 
@@ -27,6 +32,14 @@ def frontend_asset(asset_name: str) -> FileResponse:
 @router.get("/health")
 def health() -> dict[str, Any]:
     return get_runtime().health()
+
+
+@router.get("/debug/turn-log")
+def turn_log(sessionId: str, turn: int) -> dict[str, Any]:
+    runtime = get_runtime()
+    if not runtime.settings.debug_ui_enabled:
+        raise HTTPException(status_code=404, detail="debug ui disabled")
+    return load_turn_log_bundle(sessionId, turn)
 
 
 @router.post("/intent/validate", response_model=IntentValidationResponse)

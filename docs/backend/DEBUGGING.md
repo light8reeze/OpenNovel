@@ -15,8 +15,11 @@ npm run start:debug
 * `log/agent/intent-results.jsonl`: intent 결과 로그
 * `log/agent/narrative-results.jsonl`: narrative 결과 로그
 * `log/agent/game-results.jsonl`: `/game/*` 응답 로그
+* 개발 모드에서는 `GET /debug/turn-log?sessionId=...&turn=...`로 turn 단위 bundle 조회 가능
 
 주의
 
 * API key 원문은 로그에 남기지 않는 것을 원칙으로 한다.
 * JSONL 로그는 append 방식이므로 디버깅 시 run id와 timestamp를 함께 본다.
+* `GET /debug/turn-log`는 개발 모드에서만 활성화된다.
+* turn bundle은 `sessionId + turn` 기준으로 `game`, `intent`, `narrative` 로그를 묶어 반환한다.

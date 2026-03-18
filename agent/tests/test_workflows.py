@@ -14,6 +14,7 @@ def test_health() -> None:
     assert payload["intender"]["provider"]
     assert payload["narrator"]["provider"]
     assert payload["vectorStore"]["provider"] == "chroma"
+    assert payload["debugUiEnabled"] is True
 
 
 def test_intent_validation_returns_action() -> None:
