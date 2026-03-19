@@ -4,6 +4,7 @@ from pathlib import Path
 
 from app.agents.intender import IntenderAgent
 from app.agents.narrator import NarratorAgent
+from app.agents.story import StoryAgent
 from app.config import Settings, load_settings
 from app.game.models import ContentBundle
 from app.game.service import GameSessionService
@@ -21,13 +22,30 @@ class AgentRuntime:
         self.content = ContentBundle.load_from_disk(game_content_root())
         self._intender: IntenderAgent | None = None
         self._narrator: NarratorAgent | None = None
+        self._story_agent: StoryAgent | None = None
         self._game: GameSessionService | None = None
         self._intender_error: str | None = None
         self._narrator_error: str | None = None
+        self._story_agent_error: str | None = None
         self._game_error: str | None = None
         self.index_counts = {"intender": 0, "narrator": 0}
         if settings.vector_store.auto_index_on_startup:
             self.index_counts = index_documents(self.store, retrieval_content_root())
+
+    @property
+    def story_agent(self) -> StoryAgent:
+        if self._story_agent is None:
+            try:
+                self._story_agent = StoryAgent(
+                    settings=self.settings.narrator,
+                    llm_client=build_llm_client(self.settings.narrator),
+                    retrieval=self.retrieval,
+                )
+                self._story_agent_error = None
+            except LlmError as error:
+                self._story_agent_error = str(error)
+                raise
+        return self._story_agent
 
     @property
     def intender(self) -> IntenderAgent:
@@ -65,9 +83,8 @@ class AgentRuntime:
             try:
                 self._game = GameSessionService(
                     content=self.content,
-                    intender=self.intender,
-                    default_narrator=self.narrator,
-                    narrator_settings=self.settings.narrator,
+                    default_story_agent=self.story_agent,
+                    story_agent_settings=self.settings.narrator,
                 )
                 self._game_error = None
             except LlmError as error:
@@ -89,6 +106,12 @@ class AgentRuntime:
                 "model": self.settings.narrator.model,
                 "llmConfigured": bool(self.settings.narrator.api_key) or self.settings.narrator.provider == "mock",
                 "runtimeError": self._narrator_error,
+            },
+            "storyAgent": {
+                "provider": self.settings.narrator.provider,
+                "model": self.settings.narrator.model,
+                "llmConfigured": bool(self.settings.narrator.api_key) or self.settings.narrator.provider == "mock",
+                "runtimeError": self._story_agent_error,
             },
             "vectorStore": {
                 "provider": self.settings.vector_store.provider,

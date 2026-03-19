@@ -7,23 +7,21 @@
 플레이어는 채팅 형식 UI를 통해 게임을 진행하며,
 AI는 **스토리 서술과 NPC 대사**를 생성한다.
 
-게임의 **진실 상태(Source of Truth)** 는 항상 **Core Game Engine**이 관리한다.
+현재 구현에서는 **Story Agent**가 이야기 진행과 경량 상태(snapshot)를 생성한다.
 
-AI는 게임 상태를 변경하거나 판정하지 않는다.
+서버는 세션, 턴, 히스토리, 최신 snapshot만 관리한다.
 
 ---
 # 2. 아키텍처 원칙
 
-시스템은 다음 두 레이어로 분리된다.
+현재 시스템은 다음 흐름으로 동작한다.
 
 ```
 Player Input
       ↓
-Core Game Engine
+Story Agent
       ↓
-Game State Update
-      ↓
-LLM Narrative Generator
+Story Snapshot Update
       ↓
 UI 출력
 ```
@@ -32,22 +30,13 @@ UI 출력
 
 @docs/backend/BACKEND.md 문서를 참고한다.
 
-### Core Game Engine 역할
+### Story Agent 역할
 
-* 게임 상태 관리
-* 행동(Action) 판정
-* 이벤트(Event) 처리
-* 상태(State) 변경
-* 퀘스트 진행 관리
-
-### LLM 역할
-
-* 플레이어 입력 의도 파악
+* 플레이어 입력 해석
+* 이야기 진행 결정
 * 장면 묘사
-* NPC 대사 생성
-* 선택지 제안
-
-LLM은 **표현 계층(Narrative Layer)** 이다.
+* 선택지 생성
+* 경량 상태 snapshot 생성
 
 ## Frontend
 
@@ -60,7 +49,7 @@ LLM은 **표현 계층(Narrative Layer)** 이다.
 * Python `agent` 기반 단일 공식 서버
 * `GET /`, `POST /game/start`, `POST /game/action`, `GET /game/state` API
 * 메모리 기반 세션 관리
-* deterministic core game engine
+* agent-owned story progression
 * 루트 `content/` 기반 정적 JSON 콘텐츠 로더
 * LLM 기반 intent parsing / narrative 생성 agent
 * 기본 템플릿 narrative 폴백
@@ -80,35 +69,27 @@ LLM은 **표현 계층(Narrative Layer)** 이다.
 
 ## 3.1 게임 상태의 진실
 
-게임의 진실은 항상 **Game State** 이다.
+게임의 현재 진실은 세션 히스토리와 최신 **Story Snapshot** 이다.
 
-LLM은 다음을 수행하면 안 된다.
+Story Agent는 다음을 직접 생성한다.
 
-* 상태 변경
-* 성공/실패 판정
-* 퀘스트 진행 결정
-* 아이템 획득 확정
-* 사실 생성
-
-LLM은 **엔진이 결정한 결과를 표현만 한다.**
+* 진행 상태
+* 장면 변화
+* 다음 선택지
+* compatibility state
 
 ---
 
 ## 3.2 상태 변경 방식
 
-상태 변경은 항상 **Event 기반**으로 처리한다.
+현재 구현에서는 Story Agent가 **경량 상태 snapshot** 전체를 생성한다.
 
-예:
+서버는 다음만 관리한다.
 
-```
-HP_DELTA(-10)
-GOLD_DELTA(+30)
-ADD_FLAG("found_rune")
-QUEST_STAGE_SET("sunken_ruins", 2)
-AFFINITY_DELTA("caretaker", +2)
-```
-
-LLM은 Event를 생성하지 않는다.
+* session id
+* turn
+* history
+* latest snapshot
 
 ---
 
@@ -153,24 +134,18 @@ MVP에서는 단순한 상태 모델을 사용한다.
 
 ---
 
-# 5. Action → Event 처리 흐름
+# 5. Story Turn 처리 흐름
 
 플레이어 입력은 다음 순서로 처리된다.
 
 ```
 Player Input
     ↓
-Intent Parsing
+Story Agent
     ↓
-Action 결정
+Narrative / Choices / Snapshot 생성
     ↓
-Game Engine 판정
-    ↓
-Event 생성
-    ↓
-Game State 업데이트
-    ↓
-LLM Narrative 생성
+Session Update
 ```
 
 ---
@@ -183,7 +158,7 @@ LLM 프롬프트는 다음 5개 섹션으로 구성한다.
 System Rules
 World / Tone Guide
 Current State Summary
-Resolved Outcome
+Story Context
 Output Format
 ```
 
@@ -196,11 +171,10 @@ LLM의 절대 규칙이다.
 예:
 
 * 너는 텍스트 기반 인터랙티브 소설 게임의 서술 AI다.
-* 게임의 진실은 입력으로 제공된 state와 event_result이다.
+* 게임의 진실은 입력으로 제공된 history와 current snapshot이다.
 * 입력에 없는 사실을 확정하지 마라.
-* 상태를 변경하지 마라.
-* 성공/실패 판정을 새로 하지 마라.
-* 플레이어가 모르는 정보를 공개하지 마라.
+* 응답은 현재 히스토리와 snapshot을 일관되게 이어가야 한다.
+* 플레이어가 모르는 정보를 갑자기 확정하지 마라.
 * 응답은 반드시 지정된 JSON 형식을 따른다.
 
 ---
@@ -220,7 +194,7 @@ LLM의 절대 규칙이다.
 
 # 9. Current State Summary
 
-현재 장면에 필요한 상태만 전달한다.
+현재 장면에 필요한 snapshot만 전달한다.
 
 예:
 
@@ -243,9 +217,9 @@ caretaker = 7
 
 ---
 
-# 10. Resolved Outcome
+# 10. Story Turn Output
 
-Game Engine이 판정한 결과이다.
+Story Agent가 생성하는 현재 턴 결과이다.
 
 예:
 
@@ -254,14 +228,12 @@ Player action: 성소의 제단을 조사한다
 Normalized action: INVESTIGATE
 
 Result:
-success: true
-message_code: SEAL_BROKEN
-hp_delta: 0
-gold_delta: 0
-quest_stage_changed: true
+message_code: AGENT_CONTINUE
+location_id: buried_sanctum
+stage: 3
 ```
 
-LLM은 이 결과를 기반으로 **묘사만 생성한다.**
+Story Agent는 이 결과와 narrative를 함께 생성한다.
 
 ---
 
@@ -288,32 +260,36 @@ LLM 출력은 JSON 형식으로 제한한다.
 
 프로젝트에서는 다음 3개의 프롬프트를 사용한다.
 
-## 12.1 Narrative Prompt
+## 12.1 Story Prompt
 
 역할
 
+* 플레이어 입력 해석
 * 장면 묘사
-* NPC 대사 생성
 * 선택지 생성
+* 경량 상태 snapshot 생성
 
 입력
 
 * Scene context
-* Game state 요약
-* Engine result
+* Current snapshot
+* Recent history
+* Player input
 
 출력
 
 ```
 narrative
 choices
+state
+engineResult
 ```
 
 ---
 
 ## 12.2 Intent Parsing Prompt
 
-플레이어 자연어 입력을 **Action 타입**으로 변환한다.
+직접 `/intent/validate`를 호출할 때 사용하는 compatibility prompt다.
 
 예:
 
@@ -350,8 +326,8 @@ choices
 
 현재 구현에서는 Python `agent`가 LLM 연동의 진입점이다.
 
-* `IntenderAgent`가 플레이어 입력을 action candidate로 정규화한다.
-* `NarratorAgent`가 opening/turn narrative JSON 생성을 시도한다.
+* `StoryAgent`가 플레이어 입력 해석, 진행 결정, narrative, 선택지, snapshot 생성을 시도한다.
+* `IntenderAgent`, `NarratorAgent`는 direct endpoint용 compatibility 경로로 남아 있다.
 * 세션 시작 시 `geminiApiKey`를 입력받을 수 있다.
 * API 키가 있으면 해당 세션의 narrator가 Gemini API를 사용해 narrative JSON 생성을 시도한다.
 * 실패하면 agent 내부 템플릿 narrative로 폴백한다.
@@ -359,9 +335,8 @@ choices
 
 즉 현재도 다음 원칙은 유지된다.
 
-* LLM은 상태를 바꾸지 않는다.
-* LLM은 성공/실패 판정을 하지 않는다.
-* `state`, `engineResult`가 진실이다.
+* 세션 히스토리와 최신 `state` snapshot이 진실이다.
+* `engineResult`는 compatibility metadata다.
 
 ---
 
