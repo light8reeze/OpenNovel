@@ -10,23 +10,20 @@ LLM은 플레이어 입력 보조 해석과 장면 서술 역할을 수행한다
 ### Core Concept
 
 ```
-Player Input → Game Engine → World State Update → LLM Narrative → Response
+Player Input → Story Agent → Story Snapshot Update → Response
 ```
 
 핵심 구성 요소
 
-1. **Game Engine**
+1. **Story Agent**
 
-   * 세계 상태 관리
-   * 행동 결과 계산
-   * 룰 기반 로직
+   * 플레이어 입력 해석
+   * 이야기 진행 결정
+   * 장면 서술 생성
+   * 선택지 생성
+   * compatibility state / engineResult 생성
 
-2. **LLM Story Generator**
-
-   * 현재 상태 기반 장면 서술 생성
-   * 플레이어 행동 입력을 action candidate로 정규화
-
-3. **Session Manager**
+2. **Session Manager**
 
    * 플레이어 진행 상태 관리
    * 저장 / 로딩
@@ -48,15 +45,9 @@ Player Input → Game Engine → World State Update → LLM Narrative → Respon
 |              Agent FastAPI Service               |
 |                                                  |
 |  +------------------+   +----------------------+ |
-|  | Game Session     |-->| Deterministic Engine | |
-|  | Service          |   | State Transition     | |
+|  | Game Session     |-->| StoryAgent           | |
+|  | Service          |   | progression+narrative| |
 |  +------------------+   +----------------------+ |
-|           |                         |            |
-|           |                         v            |
-|           |              +--------------------+ |
-|           |              | IntenderAgent      | |
-|           |              | NarratorAgent      | |
-|           |              +--------------------+ |
 |           |                         |            |
 |           v                         v            |
 |      In-memory store         Prompt / Retrieval |
@@ -84,10 +75,9 @@ agent/
 현재 `agent/app`의 주요 책임은 다음과 같다.
 
 * `game/models.py`: `GameState`, `Event`, `TurnResult`, API request/response 모델 정의
-* `game/engine.py`: 입력 해석, 허용 액션 계산, 이벤트 생성, 상태 전이, 선택지 계산
 * `game/service.py`: 세션 오케스트레이션, in-memory 저장, `/game/*` 흐름 제어
-* `agents/intender.py`: 플레이어 입력을 action candidate로 정규화
-* `agents/narrator.py`: engine result를 narrative JSON으로 생성
+* `agents/story.py`: 입력 해석, 진행 결정, narrative, 선택지, compatibility state 생성
+* `agents/intender.py`, `agents/narrator.py`: direct debug endpoint용 compatibility 경로
 * `services/fallback_renderer.py`: 템플릿 narrative 폴백
 * `api/routes.py`: FastAPI 엔드포인트와 정적 frontend 서빙
 

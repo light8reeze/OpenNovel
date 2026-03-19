@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -214,29 +215,50 @@ def _post_json(
     payload: dict[str, Any],
     timeout_seconds: float,
 ) -> dict[str, Any]:
-    try:
-        response = httpx.post(url, headers=headers, json=payload, timeout=timeout_seconds)
-    except httpx.HTTPError as error:
-        log_llm_error(
-            role="provider",
-            provider=settings.provider,
-            model=settings.model,
-            stage="http_request",
-            error=str(error),
-            extra={"url": url},
-        )
-        raise LlmError(f"http request failed: {error}") from error
+    timeout = httpx.Timeout(timeout_seconds, connect=min(timeout_seconds, 15.0))
+    retries = 2
+    last_error: Exception | None = None
+    for attempt in range(retries + 1):
+        try:
+            response = httpx.post(url, headers=headers, json=payload, timeout=timeout)
+        except httpx.HTTPError as error:
+            last_error = error
+            should_retry = attempt < retries and _is_retryable_http_error(error)
+            log_llm_error(
+                role="provider",
+                provider=settings.provider,
+                model=settings.model,
+                stage="http_request",
+                error=str(error),
+                extra={"url": url, "attempt": attempt + 1, "retrying": should_retry},
+            )
+            if should_retry:
+                time.sleep(1.5 * (attempt + 1))
+                continue
+            raise LlmError(f"http request failed: {error}") from error
 
-    if response.status_code >= 400:
-        log_llm_error(
-            role="provider",
-            provider=settings.provider,
-            model=settings.model,
-            stage="http_status",
-            error=f"status={response.status_code}",
-            extra={"url": url, "response_text": response.text[:400]},
-        )
-        raise LlmError(f"http request returned {response.status_code}: {response.text}")
+        if response.status_code >= 400:
+            should_retry = attempt < retries and response.status_code in {408, 429, 500, 502, 503, 504}
+            log_llm_error(
+                role="provider",
+                provider=settings.provider,
+                model=settings.model,
+                stage="http_status",
+                error=f"status={response.status_code}",
+                extra={
+                    "url": url,
+                    "response_text": response.text[:400],
+                    "attempt": attempt + 1,
+                    "retrying": should_retry,
+                },
+            )
+            if should_retry:
+                time.sleep(1.5 * (attempt + 1))
+                continue
+            raise LlmError(f"http request returned {response.status_code}: {response.text}")
+        break
+    else:
+        raise LlmError(f"http request failed: {last_error}")
 
     try:
         return response.json()
@@ -306,4 +328,67 @@ def _extract_json_object(text: str) -> dict[str, Any] | None:
     try:
         return json.loads(candidate)
     except json.JSONDecodeError:
+        repaired = _repair_common_json_issues(candidate)
+        if repaired is None:
+            return None
+        try:
+            return json.loads(repaired)
+        except json.JSONDecodeError:
+            return None
+
+
+def _is_retryable_http_error(error: httpx.HTTPError) -> bool:
+    return isinstance(error, (httpx.ReadTimeout, httpx.ConnectTimeout, httpx.WriteTimeout, httpx.RemoteProtocolError))
+
+
+def _repair_common_json_issues(text: str) -> str | None:
+    stripped = text.strip()
+    if not stripped:
         return None
+
+    repaired = stripped
+    fence_variants = ("```json", "```JSON", "```")
+    for fence in fence_variants:
+        if repaired.startswith(fence):
+            repaired = repaired[len(fence) :].lstrip()
+    if repaired.endswith("```"):
+        repaired = repaired[:-3].rstrip()
+
+    repaired = repaired.replace("\r\n", "\n")
+    repaired = _escape_unescaped_inner_quotes(repaired)
+    return repaired
+
+
+def _escape_unescaped_inner_quotes(text: str) -> str:
+    chars: list[str] = []
+    in_string = False
+    escape = False
+    i = 0
+    while i < len(text):
+        ch = text[i]
+        if escape:
+            chars.append(ch)
+            escape = False
+            i += 1
+            continue
+        if ch == "\\":
+            chars.append(ch)
+            escape = True
+            i += 1
+            continue
+        if ch == '"':
+            if in_string:
+                j = i + 1
+                while j < len(text) and text[j].isspace():
+                    j += 1
+                if j < len(text) and text[j] not in {",", "}", "]", ":"}:
+                    chars.append('\\"')
+                    i += 1
+                    continue
+            in_string = not in_string
+            chars.append(ch)
+            i += 1
+            continue
+        chars.append(ch)
+        i += 1
+    return "".join(chars)
