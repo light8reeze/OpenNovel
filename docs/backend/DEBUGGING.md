@@ -2,19 +2,21 @@
 
 현재 backend는 Python `agent` 단일 서비스다. 별도의 Rust debug 플래그는 없다.
 
-예시
+실행 예시
 
 ```bash
-npm run start:debug
+PYTHONPATH=agent OPENNOVEL_RUN_ID=$(date +%Y%m%d-%H%M%S) \
+agent/.venv/bin/uvicorn app.main:app --app-dir agent --host 127.0.0.1 --port 8000
 ```
 
 현재 확인하는 핵심 로그
 
-* `log/agent.debug.<run-id>.log`: uvicorn process 로그
 * `log/agent/backend-requests.jsonl`: HTTP 요청 로그
 * `log/agent/intent-results.jsonl`: intent 결과 로그
 * `log/agent/narrative-results.jsonl`: narrative 결과 로그
 * `log/agent/game-results.jsonl`: `/game/*` 응답 로그
+* `log/agent/llm-errors.jsonl`: provider 호출/파싱 실패 로그
+* `log/combined/run-<run-id>.jsonl`: 전체 로그 통합 파일
 * 개발 모드에서는 `GET /debug/turn-log?sessionId=...&turn=...`로 turn 단위 bundle 조회 가능
 
 주의

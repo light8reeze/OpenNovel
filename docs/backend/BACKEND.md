@@ -21,15 +21,15 @@ Player Input → Game Engine → World State Update → LLM Narrative → Respon
    * 행동 결과 계산
    * 룰 기반 로직
 
-2. **LLM Story Generator**
+2. **LLM Agents**
 
-   * 현재 상태 기반 장면 서술 생성
-   * 플레이어 행동 입력을 action candidate로 정규화
+   * `IntenderAgent`: 플레이어 자연어 입력을 action candidate로 정규화
+   * `NarratorAgent`: 현재 상태 기반 장면 서술과 선택지 생성
 
 3. **Session Manager**
 
    * 플레이어 진행 상태 관리
-   * 저장 / 로딩
+   * in-memory 세션 저장 / 복원
 
 ---
 # 2. Backend Architecture
@@ -89,7 +89,8 @@ agent/
 * `agents/intender.py`: 플레이어 입력을 action candidate로 정규화
 * `agents/narrator.py`: engine result를 narrative JSON으로 생성
 * `services/fallback_renderer.py`: 템플릿 narrative 폴백
-* `api/routes.py`: FastAPI 엔드포인트와 정적 frontend 서빙
+* `services/file_logger.py`: JSONL 로그와 turn bundle 로더
+* `api/routes.py`: FastAPI 엔드포인트, 정적 frontend 서빙, debug turn log API
 
 클래스 기준 상세 아키텍처는 `docs/backend/AGENT_ARCHITECTURE.md`를 참고한다.
 
@@ -97,91 +98,20 @@ agent/
 
 # 3. Technology Stack
 
-초기 MVP 기준
+현재 구현 기준
 
-### Language
+* Language: `Python`
+* API: `FastAPI` 기반 REST
+* Session store: in-memory
+* Retrieval store: `Chroma`
+* Static frontend serving: same FastAPI process
+* LLM providers: `mock`, `openai_compatible`, `gemini`
 
-추천
-
-```
-Go or Rust
-```
-
-현재 구현 선택
-
-```
-Python
-```
-
-이유
-
-* lightweight backend
-* concurrency support
-* low latency
-* simple deployment
-
-### API
-
-```
-REST + WebSocket
-```
-
-현재 구현 선택
-
-```
-REST only
-```
-
-WebSocket 사용 이유
-
-* 채팅형 인터페이스
-* 실시간 narrative streaming
-
----
-
-### Database
-
-MVP
-
-```
-PostgreSQL
-or
-SQLite
-```
-
-현재 구현 상태
-
-```
 아직 미구현
-현재는 in-memory session store 사용
-```
 
-데이터 종류
-
-```
-player_sessions
-story_state
-character_state
-world_state
-action_history
-```
-
----
-
-### Cache (Optional)
-
-```
-Redis
-```
-
-용도
-
-```
-session state
-LLM prompt cache
-```
-
----
+* 영속 DB
+* WebSocket / streaming
+* Redis cache
 
 # 4. Project Structure
 
@@ -406,7 +336,7 @@ request
 ```json
 {
   "sessionId": "...",
-  "choiceText": "창고로 이동한다"
+  "choiceText": "회랑으로 이동한다"
 }
 ```
 
@@ -436,6 +366,7 @@ response
 다음 엔드포인트는 agent 내부 LLM 계층을 직접 검증할 때 사용한다.
 
 * `GET /health`
+* `GET /debug/turn-log?sessionId=...&turn=...`
 * `POST /intent/validate`
 * `POST /narrative/opening`
 * `POST /narrative/turn`
@@ -487,38 +418,34 @@ Pure logic only
 
 ### LLM Adapter
 
-LLM provider abstraction
+현재 구현 provider
 
 ```
-OpenAI
-Local LLM
-Anthropic
+mock
+openai_compatible
+gemini
 ```
 
-interface
+현재 구조는 `RoleModelSettings -> build_llm_client()` 형태로 role별 provider를 생성한다.
 
-```
-GenerateNarrative(context) -> text
-```
+특이 사항
 
-현재 구현은 provider abstraction 대신 Gemini 전용 최소 연동을 먼저 넣은 상태다.
-
-향후 정리 방향
-
-* provider trait 분리
-* Gemini/OpenAI 등 provider 교체 가능 구조화
-* intent / narrative / memory summary 분리
+* `POST /game/start`에서 `geminiApiKey`, `geminiModel`을 받으면 세션 전용 narrator를 만든다.
+* narrator가 실패하면 템플릿 narrative로 fallback한다.
+* intender validation 실패 시 heuristic parser로 fallback한다.
 
 ---
 
 # 11. Development Commands
 
-example
+예시
 
+```bash
+PYTHONPATH=agent agent/.venv/bin/uvicorn app.main:app --app-dir agent --host 127.0.0.1 --port 8000
 ```
-make run
-make test
-make lint
+
+```bash
+PYTHONPATH=agent agent/.venv/bin/pytest agent/tests
 ```
 
 ---

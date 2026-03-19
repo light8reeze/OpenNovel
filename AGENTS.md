@@ -58,14 +58,17 @@ LLM은 **표현 계층(Narrative Layer)** 이다.
 현재 저장소에는 다음이 구현되어 있다.
 
 * Python `agent` 기반 단일 공식 서버
-* `GET /`, `POST /game/start`, `POST /game/action`, `GET /game/state` API
+* `GET /`, `GET /health`, `POST /game/start`, `POST /game/action`, `GET /game/state` API
+* 개발 모드 전용 `GET /debug/turn-log` API
 * 메모리 기반 세션 관리
 * deterministic core game engine
 * 루트 `content/` 기반 정적 JSON 콘텐츠 로더
-* LLM 기반 intent parsing / narrative 생성 agent
+* Chroma 기반 retrieval
+* `IntenderAgent`와 `NarratorAgent`로 분리된 LLM 계층
 * 기본 템플릿 narrative 폴백
-* 선택적 Gemini 기반 narrative 생성
+* 세션 시작 시 선택적으로 Gemini API 키를 받아 narrator를 Gemini로 실행
 * 단일 서버에서 정적 frontend 서빙
+* 채팅 UI + 턴 그래프 + hover 디버그 로그 UI
 
 아직 미구현 또는 placeholder 상태인 항목은 다음과 같다.
 
@@ -367,7 +370,8 @@ choices
 
 # 13. UI 구조
 
-MVP UI는 **채팅 기반 인터페이스**를 사용한다.
+MVP UI의 주 인터랙션은 **채팅 기반 인터페이스**다.
+현재 구현은 여기에 `턴 그래프`와 `hover 디버그 로그` 패널을 보조적으로 추가한 형태다.
 
 구조
 
