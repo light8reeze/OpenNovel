@@ -35,7 +35,7 @@ def test_game_action_rejects_ambiguous_input() -> None:
     assert response.json()["detail"] == "inputText and choiceText cannot both be set"
 
 
-def test_good_ending_path_matches_rust_demo() -> None:
+def test_story_agent_progresses_session_without_engine() -> None:
     start = client.post("/game/start", json={}).json()
     session_id = start["sessionId"]
     message_codes: list[str] = []
@@ -58,23 +58,10 @@ def test_good_ending_path_matches_rust_demo() -> None:
         assert response.status_code == 200
         payload = response.json()
         message_codes.append(payload["engineResult"]["message_code"])
-
-    assert message_codes == [
-        "NOTHING_FOUND",
-        "MOVE_OK",
-        "NOTHING_FOUND",
-        "MOVE_OK",
-        "NOTHING_FOUND",
-        "MOVE_OK",
-        "NOTHING_FOUND",
-        "NOTHING_FOUND",
-        "MOVE_OK",
-        "MOVE_OK",
-        "MOVE_OK",
-        "NOTHING_FOUND",
-    ]
+    assert all(code.startswith("AGENT_") for code in message_codes)
     final_state = payload["state"]
-    assert final_state["quests"]["sunken_ruins"]["stage"] == 0
+    assert final_state["meta"]["turn"] == len(message_codes)
+    assert final_state["quests"]["sunken_ruins"]["stage"] >= 1
     assert final_state["player"]["gold"] == 15
     assert payload["engineResult"]["ending_reached"] is None
 

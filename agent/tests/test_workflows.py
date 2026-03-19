@@ -11,6 +11,7 @@ def test_health() -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["status"] == "ok"
+    assert payload["storyAgent"]["provider"]
     assert payload["intender"]["provider"]
     assert payload["narrator"]["provider"]
     assert payload["vectorStore"]["provider"] == "chroma"
