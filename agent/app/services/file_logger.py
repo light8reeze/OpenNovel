@@ -129,6 +129,8 @@ def load_turn_log_bundle(session_id: str, turn: int) -> dict[str, Any]:
     latest_game = game_entries[-1] if game_entries else None
     latest_intent = intent_entries[-1] if intent_entries else None
     latest_narrative = narrative_entries[-1] if narrative_entries else None
+    turn_token_usage = _sum_token_usage([latest_intent, latest_narrative])
+    session_token_usage = _session_token_usage(session_id, turn)
 
     return {
         "found": any((latest_game, latest_intent, latest_narrative)),
@@ -149,6 +151,8 @@ def load_turn_log_bundle(session_id: str, turn: int) -> dict[str, Any]:
             _dig(latest_intent, "response", "model"),
         ),
         "usedFallback": _dig(latest_narrative, "response", "used_fallback"),
+        "turnTokenUsage": turn_token_usage,
+        "sessionTokenUsage": session_token_usage,
         "errorSummary": _build_error_summary(latest_intent, latest_narrative),
     }
 
@@ -174,6 +178,25 @@ def _matching_entries(path: Path, session_id: str, turn: int) -> list[dict[str, 
             except json.JSONDecodeError:
                 continue
             if payload.get("sessionId") == session_id and payload.get("turn") == turn:
+                entries.append(payload)
+    entries.sort(key=lambda item: item.get("ts_unix_ms", 0))
+    return entries
+
+
+def _matching_entries_until_turn(path: Path, session_id: str, turn: int) -> list[dict[str, Any]]:
+    if not path.exists():
+        return []
+    entries: list[dict[str, Any]] = []
+    with path.open("r", encoding="utf-8") as file:
+        for line in file:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                payload = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if payload.get("sessionId") == session_id and isinstance(payload.get("turn"), int) and payload["turn"] <= turn:
                 entries.append(payload)
     entries.sort(key=lambda item: item.get("ts_unix_ms", 0))
     return entries
@@ -216,6 +239,54 @@ def _build_error_summary(
     if narrative_flags:
         summary["narrativeSafetyFlags"] = narrative_flags
     return summary or None
+
+
+def _extract_token_usage(entry: dict[str, Any] | None) -> dict[str, int]:
+    usage = _dig(entry, "response", "token_usage")
+    if not isinstance(usage, dict):
+        return {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0, "estimated": False}
+    return {
+        "input_tokens": int(usage.get("input_tokens", 0) or 0),
+        "output_tokens": int(usage.get("output_tokens", 0) or 0),
+        "total_tokens": int(usage.get("total_tokens", 0) or 0),
+        "estimated": bool(usage.get("estimated", False)),
+    }
+
+
+def _sum_token_usage(entries: list[dict[str, Any] | None]) -> dict[str, Any]:
+    totals = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0, "estimated": False}
+    for entry in entries:
+        usage = _extract_token_usage(entry)
+        for key in ("input_tokens", "output_tokens", "total_tokens"):
+            totals[key] += usage[key]
+        totals["estimated"] = totals["estimated"] or usage["estimated"]
+    return totals
+
+
+def _latest_entries_by_turn(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    latest: dict[int, dict[str, Any]] = {}
+    for entry in entries:
+        turn = entry.get("turn")
+        if isinstance(turn, int):
+            latest[turn] = entry
+    return [latest[turn] for turn in sorted(latest)]
+
+
+def _session_token_usage(session_id: str, turn: int) -> dict[str, Any]:
+    latest_intents = _latest_entries_by_turn(_matching_entries_until_turn(INTENT_LOG, session_id, turn))
+    latest_narratives = _latest_entries_by_turn(_matching_entries_until_turn(NARRATIVE_LOG, session_id, turn))
+    intent_totals = _sum_token_usage(latest_intents)
+    narrative_totals = _sum_token_usage(latest_narratives)
+    return {
+        "intent": intent_totals,
+        "narrative": narrative_totals,
+        "combined": {
+            "input_tokens": intent_totals["input_tokens"] + narrative_totals["input_tokens"],
+            "output_tokens": intent_totals["output_tokens"] + narrative_totals["output_tokens"],
+            "total_tokens": intent_totals["total_tokens"] + narrative_totals["total_tokens"],
+            "estimated": intent_totals["estimated"] or narrative_totals["estimated"],
+        },
+    }
 
 
 def _timestamp() -> str:

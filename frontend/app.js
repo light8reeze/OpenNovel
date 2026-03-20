@@ -371,6 +371,10 @@ function renderHoverMarkup(node, data) {
   const fallback = data.usedFallback === true ? "yes" : "no";
   const intentFlags = (data.errorSummary?.intentValidationFlags || []).join(", ") || "none";
   const safetyFlags = (data.errorSummary?.narrativeSafetyFlags || []).join(", ") || "none";
+  const turnTokens = formatTokenUsage(data.turnTokenUsage);
+  const sessionTokens = formatTokenUsage(data.sessionTokenUsage?.combined);
+  const intentTokens = formatTokenUsage(data.intentResponse?.token_usage);
+  const narrativeTokens = formatTokenUsage(data.narrativeResponse?.token_usage);
 
   return `
     <p class="hover-title">T${node.turn} Debug</p>
@@ -380,6 +384,8 @@ function renderHoverMarkup(node, data) {
       <dt>Provider</dt><dd>${escapeHtml(provider)}</dd>
       <dt>Model</dt><dd>${escapeHtml(model)}</dd>
       <dt>Fallback</dt><dd>${fallback}</dd>
+      <dt>Turn Tokens</dt><dd>${escapeHtml(turnTokens)}</dd>
+      <dt>Session Tokens</dt><dd>${escapeHtml(sessionTokens)}</dd>
       <dt>Intent Flags</dt><dd>${escapeHtml(intentFlags)}</dd>
       <dt>Safety Flags</dt><dd>${escapeHtml(safetyFlags)}</dd>
     </dl>
@@ -393,10 +399,12 @@ function renderHoverMarkup(node, data) {
     </div>
     <div class="hover-block">
       <p class="hover-label">Intent</p>
+      <p class="hover-copy">tokens: ${escapeHtml(intentTokens)}</p>
       <pre>${escapeHtml(JSON.stringify({ request: data.intentRequest, response: data.intentResponse }, null, 2))}</pre>
     </div>
     <div class="hover-block">
       <p class="hover-label">Narrative</p>
+      <p class="hover-copy">tokens: ${escapeHtml(narrativeTokens)}</p>
       <pre>${escapeHtml(
         JSON.stringify({ request: data.narrativeRequest, response: data.narrativeResponse }, null, 2),
       )}</pre>
@@ -408,7 +416,8 @@ function debugSummary(data) {
   const provider = data.provider || "n/a";
   const model = data.model || "n/a";
   const fallback = data.usedFallback === true ? "fallback" : "live";
-  return `${provider} / ${model} / ${fallback}`;
+  const turnTokens = formatTokenUsage(data.turnTokenUsage);
+  return `${provider} / ${model} / ${fallback} / tokens=${turnTokens}`;
 }
 
 function escapeHtml(value) {
@@ -416,6 +425,17 @@ function escapeHtml(value) {
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;");
+}
+
+function formatTokenUsage(usage) {
+  if (!usage) {
+    return "n/a";
+  }
+  const input = Number(usage.input_tokens || 0);
+  const output = Number(usage.output_tokens || 0);
+  const total = Number(usage.total_tokens || 0);
+  const prefix = usage.estimated ? "~" : "";
+  return `${prefix}${input}/${output}/${total}`;
 }
 
 async function startGame() {

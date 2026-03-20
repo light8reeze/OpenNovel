@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -9,6 +10,7 @@ import httpx
 from pydantic import BaseModel
 
 from app.config import RoleModelSettings
+from app.schemas.common import TokenUsage
 from app.services.file_logger import log_llm_error
 
 
@@ -21,6 +23,7 @@ class LlmJsonResult:
     payload: dict[str, Any]
     provider: str
     model: str
+    token_usage: TokenUsage | None = None
 
 
 class BaseLlmClient:
@@ -116,10 +119,16 @@ class OpenAICompatibleClient(BaseLlmClient):
             )
             raise LlmError(f"openai-compatible content was not valid json: {error}") from error
 
+        token_usage = _extract_openai_token_usage(response_json) or _estimate_token_usage(
+            system_prompt,
+            user_prompt,
+            content,
+        )
         return LlmJsonResult(
             payload=parsed,
             provider=self.settings.provider,
             model=self.settings.model,
+            token_usage=token_usage,
         )
 
 
@@ -191,10 +200,16 @@ class GeminiClient(BaseLlmClient):
                 )
                 raise LlmError(f"gemini content was not valid json: {error}") from error
 
+        token_usage = _extract_gemini_token_usage(response_json) or _estimate_token_usage(
+            system_prompt,
+            user_prompt,
+            text,
+        )
         return LlmJsonResult(
             payload=parsed,
             provider=self.settings.provider,
             model=self.model_id,
+            token_usage=token_usage,
         )
 
 
@@ -392,3 +407,48 @@ def _escape_unescaped_inner_quotes(text: str) -> str:
         chars.append(ch)
         i += 1
     return "".join(chars)
+
+
+def _extract_openai_token_usage(response_json: dict[str, Any]) -> TokenUsage | None:
+    usage = response_json.get("usage")
+    if not isinstance(usage, dict):
+        return None
+    return TokenUsage(
+        input_tokens=int(usage.get("prompt_tokens", 0) or 0),
+        output_tokens=int(usage.get("completion_tokens", 0) or 0),
+        total_tokens=int(usage.get("total_tokens", 0) or 0),
+        estimated=False,
+    )
+
+
+def _extract_gemini_token_usage(response_json: dict[str, Any]) -> TokenUsage | None:
+    usage = response_json.get("usageMetadata")
+    if not isinstance(usage, dict):
+        return None
+    input_tokens = int(usage.get("promptTokenCount", 0) or 0)
+    output_tokens = int(usage.get("candidatesTokenCount", 0) or 0)
+    total_tokens = int(usage.get("totalTokenCount", input_tokens + output_tokens) or 0)
+    return TokenUsage(
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        total_tokens=total_tokens,
+        estimated=False,
+    )
+
+
+def _estimate_token_usage(system_prompt: str, user_prompt: str, response_text: str) -> TokenUsage:
+    input_tokens = _estimate_tokens(system_prompt) + _estimate_tokens(user_prompt)
+    output_tokens = _estimate_tokens(response_text)
+    return TokenUsage(
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        total_tokens=input_tokens + output_tokens,
+        estimated=True,
+    )
+
+
+def _estimate_tokens(text: str) -> int:
+    stripped = text.strip()
+    if not stripped:
+        return 0
+    return max(1, math.ceil(len(stripped) / 4))

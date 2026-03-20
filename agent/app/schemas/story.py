@@ -5,7 +5,7 @@ from typing import Any, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.game.models import GameState
-from app.schemas.common import Action, EngineResult
+from app.schemas.common import Action, EngineResult, TokenUsage
 
 
 class StoryMessage(BaseModel):
@@ -61,3 +61,4 @@ class StoryTurnResponse(BaseModel):
     retrieval_used: bool = False
     retrieved_document_ids: list[str] = Field(default_factory=list)
     safety_flags: list[str] = Field(default_factory=list)
+    token_usage: Optional[TokenUsage] = None
