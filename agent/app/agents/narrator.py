@@ -6,7 +6,7 @@ from app.config import RoleModelSettings
 from app.prompts.narrative_builder import build_narrative_prompts
 from app.retrieval.schemas import RetrievalContext
 from app.retrieval.search import RetrievalService
-from app.schemas.narrative import NarrativeRequest, NarrativeResponse
+from app.schemas.narrative import NarrativeLlmResponse, NarrativeRequest, NarrativeResponse
 from app.services.fallback_renderer import render_opening, render_turn
 from app.services.file_logger import log_llm_error
 from app.services.llm_client import BaseLlmClient, LlmError
@@ -30,7 +30,7 @@ class NarratorAgent:
         try:
             result = self.llm_client.generate_json(
                 schema_name=f"{kind}_narrative",
-                schema_model=NarrativeResponse,
+                schema_model=NarrativeLlmResponse,
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
             )
@@ -43,6 +43,7 @@ class NarratorAgent:
                     "used_fallback": False,
                     "retrieval_used": context.used,
                     "retrieved_document_ids": context.document_ids,
+                    "token_usage": result.token_usage.model_dump(mode="json") if result.token_usage else None,
                 }
             )
         except (LlmError, ValidationError) as error:

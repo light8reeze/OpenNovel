@@ -54,6 +54,7 @@ class StoryAgent:
                     "used_fallback": False,
                     "retrieval_used": context.used,
                     "retrieved_document_ids": context.document_ids,
+                    "token_usage": result.token_usage.model_dump(mode="json") if result.token_usage else None,
                 }
             )
         except (LlmError, ValidationError) as error:

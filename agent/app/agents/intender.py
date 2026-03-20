@@ -7,7 +7,7 @@ from app.prompts.intent_builder import build_intent_prompts
 from app.retrieval.schemas import RetrievalContext
 from app.retrieval.search import RetrievalService
 from app.schemas.common import Action, ActionType
-from app.schemas.intent import IntentValidationRequest, IntentValidationResponse
+from app.schemas.intent import IntentValidationLlmResponse, IntentValidationRequest, IntentValidationResponse
 from app.services.file_logger import log_llm_error
 from app.services.llm_client import BaseLlmClient, LlmError
 
@@ -24,7 +24,7 @@ class IntenderAgent:
         try:
             result = self.llm_client.generate_json(
                 schema_name="intent_validation",
-                schema_model=IntentValidationResponse,
+                schema_model=IntentValidationLlmResponse,
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
             )
@@ -36,6 +36,7 @@ class IntenderAgent:
                     "model": result.model,
                     "retrieval_used": context.used,
                     "retrieved_document_ids": context.document_ids,
+                    "token_usage": result.token_usage.model_dump(mode="json") if result.token_usage else None,
                 }
             )
         except (LlmError, ValidationError) as error:

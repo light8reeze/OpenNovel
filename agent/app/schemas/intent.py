@@ -1,6 +1,8 @@
+from typing import Optional
+
 from pydantic import BaseModel, Field
 
-from app.schemas.common import Action, ActionType, SceneContext, StateSummary
+from app.schemas.common import Action, ActionType, SceneContext, StateSummary, TokenUsage
 
 
 class IntentValidationRequest(BaseModel):
@@ -8,6 +10,13 @@ class IntentValidationRequest(BaseModel):
     allowed_actions: list[ActionType] = Field(default_factory=list)
     state_summary: StateSummary
     scene_context: SceneContext
+
+
+class IntentValidationLlmResponse(BaseModel):
+    action: Action
+    confidence: float
+    validation_flags: list[str] = Field(default_factory=list)
+    source: str
 
 
 class IntentValidationResponse(BaseModel):
@@ -19,3 +28,4 @@ class IntentValidationResponse(BaseModel):
     model: str = ""
     retrieval_used: bool = False
     retrieved_document_ids: list[str] = Field(default_factory=list)
+    token_usage: Optional[TokenUsage] = None
