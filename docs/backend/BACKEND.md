@@ -6,6 +6,7 @@ OpenNovel Backend — Codex Development Guide
 
 플레이어는 채팅 인터페이스를 통해 소설 속 주인공이 되어 행동을 선택하며,
 LLM은 플레이어 입력 보조 해석과 장면 서술 역할을 수행한다.
+서버 startup 시에는 세션 시작용 story setup preset 3개를 agent가 생성하려 시도하고, 실패하면 fallback preset을 사용한다.
 
 ### Core Concept
 
@@ -25,11 +26,13 @@ Player Input → Game Engine → World State Update → LLM Narrative → Respon
 
    * `IntenderAgent`: 플레이어 자연어 입력을 action candidate로 정규화
    * `NarratorAgent`: 현재 상태 기반 장면 서술과 선택지 생성
+   * `StorySetupAgent`: 서버 시작 시 preset 3개 생성
 
 3. **Session Manager**
 
    * 플레이어 진행 상태 관리
    * in-memory 세션 저장 / 복원
+   * 선택된 `storySetupId`를 세션 단위로 유지
 
 ---
 # 2. Backend Architecture
@@ -86,11 +89,12 @@ agent/
 * `game/models.py`: `GameState`, `Event`, `TurnResult`, API request/response 모델 정의
 * `game/engine.py`: 입력 해석, 허용 액션 계산, 이벤트 생성, 상태 전이, 선택지 계산
 * `game/service.py`: 세션 오케스트레이션, in-memory 저장, `/game/*` 흐름 제어
+* `agents/story_setup.py`: startup preset 생성과 fallback preset 제공
 * `agents/intender.py`: 플레이어 입력을 action candidate로 정규화
 * `agents/narrator.py`: engine result를 narrative JSON으로 생성
 * `services/fallback_renderer.py`: 템플릿 narrative 폴백
 * `services/file_logger.py`: JSONL 로그와 turn bundle 로더
-* `api/routes.py`: FastAPI 엔드포인트, 정적 frontend 서빙, debug turn log API
+* `api/routes.py`: FastAPI 엔드포인트, 정적 frontend 서빙, debug turn log API, `/story-setups`
 
 클래스 기준 상세 아키텍처는 `docs/backend/AGENT_ARCHITECTURE.md`를 참고한다.
 

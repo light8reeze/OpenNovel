@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.game.models import GameState
 from app.schemas.common import Action, EngineResult, TokenUsage
+from app.schemas.story_setup import StorySetup
 
 
 class StoryMessage(BaseModel):
@@ -18,6 +19,7 @@ class StoryTurnRequest(BaseModel):
     state: GameState
     history: list[StoryMessage] = Field(default_factory=list)
     player_input: Optional[str] = None
+    story_setup: StorySetup
 
 
 class StoryActionDraft(BaseModel):

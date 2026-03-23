@@ -111,7 +111,8 @@ h2 {
 
 .choice,
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -135,7 +136,8 @@ button {
   gap: 12px;
 }
 
-input {
+input,
+select {
   width: 100%;
   border-radius: 14px;
   padding: 14px 16px;
@@ -146,6 +148,10 @@ input {
 
 #gemini-key {
   min-width: min(280px, 40vw);
+}
+
+#story-setup {
+  min-width: min(260px, 36vw);
 }
 
 .panel-head {

@@ -10,6 +10,7 @@ from app.retrieval.search import RetrievalService
 from app.schemas.common import Action, ActionType, EngineResult, SceneContext
 from app.schemas.narrative import NarrativeRequest
 from app.schemas.story import StoryActionDraft, StoryEngineResultDraft, StoryMessage, StoryTurnDraft, StoryTurnRequest, StoryTurnResponse
+from app.schemas.story_setup import StorySetup
 from app.services.file_logger import log_llm_error
 from app.services.llm_client import BaseLlmClient, LlmError
 
@@ -20,12 +21,24 @@ class StoryAgent:
         self.llm_client = llm_client
         self.retrieval = retrieval
 
-    def start(self, state: GameState) -> StoryTurnResponse:
-        request = StoryTurnRequest(mode="opening", state=state, history=[])
+    def start(self, state: GameState, story_setup: StorySetup) -> StoryTurnResponse:
+        request = StoryTurnRequest(mode="opening", state=state, history=[], story_setup=story_setup)
         return self._render(request)
 
-    def advance(self, state: GameState, history: list[StoryMessage], player_input: str) -> StoryTurnResponse:
-        request = StoryTurnRequest(mode="turn", state=state, history=history, player_input=player_input)
+    def advance(
+        self,
+        state: GameState,
+        history: list[StoryMessage],
+        player_input: str,
+        story_setup: StorySetup,
+    ) -> StoryTurnResponse:
+        request = StoryTurnRequest(
+            mode="turn",
+            state=state,
+            history=history,
+            player_input=player_input,
+            story_setup=story_setup,
+        )
         return self._render(request)
 
     def _render(self, request: StoryTurnRequest) -> StoryTurnResponse:
@@ -290,10 +303,7 @@ class StoryAgent:
 
     def _narrative_for_state(self, request: StoryTurnRequest, state: GameState, action: Action) -> str:
         if request.mode == "opening":
-            return (
-                "폐허 입구에는 축축한 밤공기와 오래 잠든 돌의 냄새가 감돈다. "
-                "유적 아래로 이어지는 어둠은 아직 누구의 발걸음도 허락하지 않은 듯 고요하다."
-            )
+            return request.story_setup.opening_hook
         location_names = {
             "ruins_entrance": "폐허 입구",
             "collapsed_hall": "무너진 회랑",
@@ -308,7 +318,10 @@ class StoryAgent:
             ActionType.USE_ITEM: "작은 불빛 하나가 어둠 속 질감을 다시 드러낸다.",
             ActionType.FLEE: "쉽게 등을 돌리지는 못했지만, 한 발 물러서며 상황을 가늠할 틈은 생겼다.",
         }.get(action.action_type, "유적은 조용히 다음 반응을 기다린다.")
-        return f"{location_names.get(state.player.location_id, state.player.location_id)}. {action_label}"
+        return (
+            f"{location_names.get(state.player.location_id, state.player.location_id)}. {action_label} "
+            f"{request.story_setup.tone}의 결이 장면 위에 남고, 목표는 여전히 {request.story_setup.player_goal} 쪽을 가리킨다."
+        )
 
     def _default_engine_result(self, request: StoryTurnRequest, action: Action | None = None) -> EngineResult:
         if request.mode == "opening":

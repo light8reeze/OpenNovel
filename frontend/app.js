@@ -4,6 +4,8 @@ const stateEl = document.getElementById("state");
 const formEl = document.getElementById("input-form");
 const inputEl = document.getElementById("input");
 const geminiKeyEl = document.getElementById("gemini-key");
+const storySetupEl = document.getElementById("story-setup");
+const storyTitleEl = document.getElementById("story-title");
 const startButton = document.getElementById("start-button");
 const graphEl = document.getElementById("graph");
 const graphHoverEl = document.getElementById("graph-hover");
@@ -14,6 +16,7 @@ const SESSION_KEY = "open-novel-session";
 const LEGACY_SESSION_KEY = "novel-gg-session";
 const GEMINI_KEY_STORAGE = "open-novel-gemini-key";
 const LEGACY_GEMINI_KEY_STORAGE = "novel-gg-gemini-key";
+const STORY_SETUP_STORAGE = "open-novel-story-setup";
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 let sessionId =
@@ -21,6 +24,8 @@ let sessionId =
 let debugUiEnabled = false;
 let turnHistory = [];
 let selectedTurnId = null;
+let storySetups = [];
+let selectedStorySetupId = localStorage.getItem(STORY_SETUP_STORAGE) || null;
 
 const debugCache = new Map();
 
@@ -28,6 +33,34 @@ geminiKeyEl.value =
   localStorage.getItem(GEMINI_KEY_STORAGE) ||
   localStorage.getItem(LEGACY_GEMINI_KEY_STORAGE) ||
   "";
+
+function renderStorySetupSelector() {
+  storySetupEl.innerHTML = "";
+  storySetups.forEach((preset) => {
+    const option = document.createElement("option");
+    option.value = preset.id;
+    option.textContent = preset.title;
+    storySetupEl.appendChild(option);
+  });
+  if (!storySetups.length) {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = "시나리오를 불러오는 중...";
+    storySetupEl.appendChild(option);
+    storySetupEl.disabled = true;
+    return;
+  }
+  storySetupEl.disabled = false;
+  const hasSelection = storySetups.some((preset) => preset.id === selectedStorySetupId);
+  selectedStorySetupId = hasSelection ? selectedStorySetupId : storySetups[0].id;
+  storySetupEl.value = selectedStorySetupId;
+  updateStoryTitle(selectedStorySetupId);
+}
+
+function updateStoryTitle(storySetupId) {
+  const preset = storySetups.find((item) => item.id === storySetupId);
+  storyTitleEl.textContent = preset ? preset.title : "OpenNovel Scenario";
+}
 
 function appendMessage(role, content) {
   const item = document.createElement("article");
@@ -107,6 +140,7 @@ function createStartNode(data) {
     questStage: data.state.quests.sunken_ruins.stage,
     hp: data.state.player.hp,
     gold: data.state.player.gold,
+    storySetupId: data.storySetupId || selectedStorySetupId,
   };
 }
 
@@ -122,6 +156,7 @@ function createActionNode(payload, data) {
     questStage: data.state.quests.sunken_ruins.stage,
     hp: data.state.player.hp,
     gold: data.state.player.gold,
+    storySetupId: data.storySetupId || selectedStorySetupId,
   };
 }
 
@@ -446,16 +481,32 @@ async function startGame() {
     localStorage.removeItem(GEMINI_KEY_STORAGE);
   }
 
+  if (!storySetups.length) {
+    await fetchStorySetups();
+  }
+  selectedStorySetupId = storySetupEl.value || selectedStorySetupId;
+  if (selectedStorySetupId) {
+    localStorage.setItem(STORY_SETUP_STORAGE, selectedStorySetupId);
+    updateStoryTitle(selectedStorySetupId);
+  }
+
   const response = await fetch("/game/start", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       geminiApiKey: geminiApiKey || undefined,
+      storySetupId: selectedStorySetupId || undefined,
     }),
   });
   const data = await response.json();
   sessionId = data.sessionId;
   localStorage.setItem(SESSION_KEY, sessionId);
+  selectedStorySetupId = data.storySetupId || selectedStorySetupId;
+  if (selectedStorySetupId) {
+    localStorage.setItem(STORY_SETUP_STORAGE, selectedStorySetupId);
+    storySetupEl.value = selectedStorySetupId;
+    updateStoryTitle(selectedStorySetupId);
+  }
   logEl.innerHTML = "";
   resetTurnHistory();
   appendMessage("ai", data.narrative);
@@ -475,7 +526,22 @@ async function restoreState() {
     return;
   }
   const data = await response.json();
+  selectedStorySetupId = data.storySetupId || selectedStorySetupId;
+  if (selectedStorySetupId && storySetups.some((preset) => preset.id === selectedStorySetupId)) {
+    storySetupEl.value = selectedStorySetupId;
+    updateStoryTitle(selectedStorySetupId);
+  }
   renderState(data.state);
+}
+
+async function fetchStorySetups() {
+  const response = await fetch("/story-setups");
+  if (!response.ok) {
+    return;
+  }
+  const data = await response.json();
+  storySetups = data.presets || [];
+  renderStorySetupSelector();
 }
 
 async function sendAction(payload) {
@@ -512,11 +578,21 @@ formEl.addEventListener("submit", async (event) => {
 });
 
 startButton.addEventListener("click", startGame);
+storySetupEl.addEventListener("change", () => {
+  selectedStorySetupId = storySetupEl.value || null;
+  if (selectedStorySetupId) {
+    localStorage.setItem(STORY_SETUP_STORAGE, selectedStorySetupId);
+  } else {
+    localStorage.removeItem(STORY_SETUP_STORAGE);
+  }
+  updateStoryTitle(selectedStorySetupId);
+});
 
-fetchHealth().then(() => {
-  restoreState().then(() => {
-    if (!sessionId) {
-      startGame();
-    }
-  });
+renderStorySetupSelector();
+fetchHealth().then(async () => {
+  await fetchStorySetups();
+  await restoreState();
+  if (!sessionId) {
+    await startGame();
+  }
 });

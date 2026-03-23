@@ -12,7 +12,38 @@ def test_start_game_returns_rust_compatible_shape() -> None:
     payload = response.json()
     assert payload["sessionId"].startswith("session-")
     assert payload["state"]["meta"]["turn"] == 0
+    assert payload["storySetupId"]
     assert payload["choices"] == ["주변을 조사한다", "관리인과 대화한다", "회랑으로 이동한다"]
+
+
+def test_story_setups_returns_three_presets() -> None:
+    response = client.get("/story-setups")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["source"] in {"llm", "fallback"}
+    assert len(payload["presets"]) == 3
+    assert all(preset["id"] for preset in payload["presets"])
+
+
+def test_start_game_uses_requested_story_setup_and_persists_it() -> None:
+    presets = client.get("/story-setups").json()["presets"]
+    selected_id = presets[1]["id"]
+    response = client.post("/game/start", json={"storySetupId": selected_id})
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["storySetupId"] == selected_id
+
+    state_response = client.get("/game/state", params={"sessionId": payload["sessionId"]})
+    assert state_response.status_code == 200
+    assert state_response.json()["storySetupId"] == selected_id
+
+
+def test_start_game_falls_back_to_default_story_setup_for_unknown_id() -> None:
+    presets = client.get("/story-setups").json()["presets"]
+    default_id = presets[0]["id"]
+    response = client.post("/game/start", json={"storySetupId": "missing-setup"})
+    assert response.status_code == 200
+    assert response.json()["storySetupId"] == default_id
 
 
 def test_game_state_returns_404_for_unknown_session() -> None:

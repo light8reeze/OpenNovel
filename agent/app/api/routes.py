@@ -9,6 +9,7 @@ from app.runtime import get_runtime
 from app.runtime import frontend_root
 from app.schemas.intent import IntentValidationRequest, IntentValidationResponse
 from app.schemas.narrative import NarrativeRequest, NarrativeResponse
+from app.schemas.story_setup import StorySetupListResponse
 from app.services.file_logger import (
     load_turn_log_bundle,
     log_backend_request,
@@ -32,6 +33,13 @@ def frontend_asset(asset_name: str) -> FileResponse:
 @router.get("/health")
 def health() -> dict[str, Any]:
     return get_runtime().health()
+
+
+@router.get("/story-setups", response_model=StorySetupListResponse)
+def story_setups() -> StorySetupListResponse:
+    runtime = get_runtime()
+    presets, source = runtime.game.available_story_setups()
+    return StorySetupListResponse(presets=presets, source=source)
 
 
 @router.get("/debug/turn-log")
@@ -78,6 +86,7 @@ def start_game(payload: Optional[StartRequest] = None) -> Any:
         StartOptions(
             gemini_api_key=request.gemini_api_key,
             gemini_model=request.gemini_model,
+            story_setup_id=request.story_setup_id,
         )
     )
     return response.model_dump(mode="json", by_alias=True)
@@ -104,4 +113,4 @@ def get_state(sessionId: str) -> Any:
         response = get_runtime().game.get_state(sessionId)
     except SessionNotFoundError as error:
         raise HTTPException(status_code=404, detail="session not found") from error
-    return response.model_dump(mode="json")
+    return response.model_dump(mode="json", by_alias=True)

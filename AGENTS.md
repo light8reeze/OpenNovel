@@ -47,6 +47,8 @@ UI 출력
 현재 저장소에는 다음이 구현되어 있다.
 
 * Python `agent` 기반 단일 공식 서버
+* 서버 startup 시 agent가 생성하거나 fallback으로 채우는 3개의 story setup preset
+* `GET /story-setups` API
 * `GET /`, `GET /health`, `POST /game/start`, `POST /game/action`, `GET /game/state` API
 * 개발 모드 전용 `GET /debug/turn-log` API
 * 메모리 기반 세션 관리
@@ -54,7 +56,9 @@ UI 출력
 * 루트 `content/` 기반 정적 JSON 콘텐츠 로더
 * Chroma 기반 retrieval
 * `IntenderAgent`와 `NarratorAgent`로 분리된 LLM 계층
+* startup용 `StorySetupAgent`
 * 기본 템플릿 narrative 폴백
+* 세션 시작 시 story setup preset 선택
 * 세션 시작 시 선택적으로 Gemini API 키를 받아 narrator를 Gemini로 실행
 * 단일 서버에서 정적 frontend 서빙
 * 채팅 UI + 턴 그래프 + hover 디버그 로그 UI
@@ -184,7 +188,7 @@ LLM의 절대 규칙이다.
 
 # 8. World / Tone Guide
 
-세계관과 문체를 정의한다.
+세계관과 문체는 세션 시작 시 선택한 **story setup preset**이 정의한다.
 
 예:
 

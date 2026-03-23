@@ -15,6 +15,7 @@ def test_health() -> None:
     assert payload["intender"]["provider"]
     assert payload["narrator"]["provider"]
     assert payload["vectorStore"]["provider"] == "chroma"
+    assert payload["storySetups"]["count"] == 3
     assert payload["debugUiEnabled"] is True
 
 

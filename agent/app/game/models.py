@@ -8,6 +8,7 @@ from typing import Any, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas.common import Action, EngineResult
+from app.schemas.story_setup import StorySetup
 
 
 class MetaState(BaseModel):
@@ -76,6 +77,7 @@ class StartRequest(BaseModel):
 
     gemini_api_key: Optional[str] = Field(default=None, alias="geminiApiKey")
     gemini_model: Optional[str] = Field(default=None, alias="geminiModel")
+    story_setup_id: Optional[str] = Field(default=None, alias="storySetupId")
 
 
 class StartResponse(BaseModel):
@@ -85,6 +87,7 @@ class StartResponse(BaseModel):
     narrative: str
     choices: list[str] = Field(default_factory=list)
     state: GameState
+    story_setup_id: Optional[str] = Field(default=None, alias="storySetupId")
 
 
 class ActionRequest(BaseModel):
@@ -102,10 +105,12 @@ class ActionResponse(BaseModel):
     choices: list[str] = Field(default_factory=list)
     engine_result: EngineResult = Field(alias="engineResult")
     state: GameState
+    story_setup_id: Optional[str] = Field(default=None, alias="storySetupId")
 
 
 class StateResponse(BaseModel):
     state: GameState
+    story_setup_id: Optional[str] = Field(default=None, alias="storySetupId")
 
 
 class Location(BaseModel):
@@ -183,6 +188,9 @@ class Resolution:
 class StartOptions:
     gemini_api_key: Optional[str] = None
     gemini_model: Optional[str] = None
+    story_setup_id: Optional[str] = None
+
+
 
 
 def initial_state() -> GameState:
