@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+import sys
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -230,6 +231,8 @@ def _post_json(
     payload: dict[str, Any],
     timeout_seconds: float,
 ) -> dict[str, Any]:
+    if "pytest" in sys.modules:
+        raise LlmError("remote llm calls disabled under pytest")
     timeout = httpx.Timeout(timeout_seconds, connect=min(timeout_seconds, 15.0))
     retries = 2
     last_error: Exception | None = None

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import sys
+from dataclasses import replace
 from pathlib import Path
 
 from app.agents.intender import IntenderAgent
 from app.agents.narrator import NarratorAgent
 from app.agents.story import StoryAgent
+from app.agents.story_setup import FALLBACK_STORY_SETUPS, StorySetupAgent
 from app.config import Settings, load_settings
 from app.game.models import ContentBundle
 from app.game.service import GameSessionService
@@ -20,6 +23,7 @@ class AgentRuntime:
         self.store = ChromaVectorStore(settings.vector_store, settings.embedding)
         self.retrieval = RetrievalService(self.store, settings)
         self.content = ContentBundle.load_from_disk(game_content_root())
+        self._story_setups, self.story_setup_source = self._generate_story_setups()
         self._intender: IntenderAgent | None = None
         self._narrator: NarratorAgent | None = None
         self._story_agent: StoryAgent | None = None
@@ -85,6 +89,8 @@ class AgentRuntime:
                     content=self.content,
                     default_story_agent=self.story_agent,
                     story_agent_settings=self.settings.narrator,
+                    story_setups=self._story_setups,
+                    story_setup_source=self.story_setup_source,
                 )
                 self._game_error = None
             except LlmError as error:
@@ -126,8 +132,31 @@ class AgentRuntime:
             "game": {
                 "runtimeError": self._game_error,
             },
+            "storySetups": {
+                "count": len(self._story_setups),
+                "source": self.story_setup_source,
+                "ids": [preset.id for preset in self._story_setups],
+            },
             "debugUiEnabled": self.settings.debug_ui_enabled,
         }
+
+    @property
+    def story_setups(self):
+        return list(self._story_setups)
+
+    def _generate_story_setups(self):
+        if self.settings.narrator.provider == "mock" or "pytest" in sys.modules:
+            return list(FALLBACK_STORY_SETUPS), "fallback"
+        generation_settings = replace(
+            self.settings.narrator,
+            timeout_seconds=min(self.settings.narrator.timeout_seconds, 3.0),
+        )
+        try:
+            llm_client = build_llm_client(generation_settings)
+        except LlmError:
+            return list(FALLBACK_STORY_SETUPS), "fallback"
+        generator = StorySetupAgent(settings=generation_settings, llm_client=llm_client)
+        return generator.generate_with_fallback()
 
 
 _RUNTIME: AgentRuntime | None = None

@@ -114,8 +114,12 @@ frontend/
 현재 구현 추가 사항
 
 * 헤더에 Gemini API Key 입력 필드가 존재한다.
+* 헤더에 story setup selector가 존재한다.
+* 앱 로드 시 `GET /story-setups`로 preset 3개를 가져온다.
 * 새 세션 시작 시 API 키를 `POST /game/start`로 전달한다.
+* 새 세션 시작 시 선택한 `storySetupId`도 함께 전달한다.
 * 입력한 키는 브라우저 `localStorage`에 저장된다.
+* 선택한 story setup도 `localStorage`에 저장된다.
 * 입력 또는 choice 선택이 끝날 때마다 그래프에 새 turn node가 추가된다.
 
 ---
@@ -171,11 +175,14 @@ Inventory:
 * `selectedTurnId`
 * `debugUiEnabled`
 * Gemini API 키 입력값
+* `storySetups`
+* `selectedStorySetupId`
 
 저장 방식
 
 * `sessionId`는 `localStorage`에 저장된다.
 * Gemini API 키도 `localStorage`에 저장된다.
+* 선택한 `storySetupId`도 `localStorage`에 저장된다.
 * 새로고침 시 `GET /game/state`로 현재 상태 패널은 복원되지만, 전체 스토리 로그는 다시 구성하지 않는다.
 
 ---
@@ -185,6 +192,7 @@ Inventory:
 Game API
 
 ```
+GET  /story-setups
 POST /game/start
 POST /game/action
 GET  /game/state
@@ -198,6 +206,7 @@ GET  /game/state
 
 ```json
 {
+  "storySetupId": "sunken_ruins",
   "geminiApiKey": "AIza...",
   "geminiModel": "gemini-2.5-flash"
 }

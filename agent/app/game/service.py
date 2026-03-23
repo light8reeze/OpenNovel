@@ -19,6 +19,7 @@ from app.game.models import (
     initial_state,
 )
 from app.schemas.story import StoryMessage
+from app.schemas.story_setup import StorySetup
 from app.services.file_logger import log_game_result, log_intent_result, log_narrative_result
 from app.services.llm_client import build_llm_client
 
@@ -32,11 +33,19 @@ class InvalidActionRequestError(ValueError):
 
 
 class SessionRecord:
-    def __init__(self, state: GameState, story_agent: StoryAgent, history: list[StoryMessage], choices: list[str]):
+    def __init__(
+        self,
+        state: GameState,
+        story_agent: StoryAgent,
+        history: list[StoryMessage],
+        choices: list[str],
+        story_setup: StorySetup,
+    ):
         self.state = state
         self.story_agent = story_agent
         self.history = history
         self.choices = choices
+        self.story_setup = story_setup
 
 
 class GameSessionService:
@@ -45,10 +54,14 @@ class GameSessionService:
         content: ContentBundle,
         default_story_agent: StoryAgent,
         story_agent_settings: RoleModelSettings,
+        story_setups: list[StorySetup],
+        story_setup_source: str,
     ):
         self.content = content
         self.default_story_agent = default_story_agent
         self.story_agent_settings = story_agent_settings
+        self.story_setups = list(story_setups)
+        self.story_setup_source = story_setup_source
         self.sessions: dict[str, SessionRecord] = {}
         self.lock = Lock()
         self.counter = count(1)
@@ -57,7 +70,8 @@ class GameSessionService:
         session_id = f"session-{time_ns()}-{next(self.counter)}"
         state = initial_state()
         story_agent = self._build_session_story_agent(options)
-        turn = story_agent.start(state)
+        story_setup = self._select_story_setup(options.story_setup_id)
+        turn = story_agent.start(state, story_setup)
         history = [StoryMessage(role="assistant", content=turn.narrative)]
         with self.lock:
             self.sessions[session_id] = SessionRecord(
@@ -65,11 +79,18 @@ class GameSessionService:
                 story_agent=story_agent,
                 history=history,
                 choices=turn.choices,
+                story_setup=story_setup,
             )
-        response = StartResponse(sessionId=session_id, narrative=turn.narrative, choices=turn.choices, state=turn.state)
+        response = StartResponse(
+            sessionId=session_id,
+            narrative=turn.narrative,
+            choices=turn.choices,
+            state=turn.state,
+            storySetupId=story_setup.id,
+        )
         log_narrative_result(
             "/game/start",
-            {"mode": "opening"},
+            {"mode": "opening", "storySetupId": story_setup.id},
             turn.model_dump(mode="json", by_alias=True),
             context={"sessionId": session_id, "turn": 0},
         )
@@ -79,6 +100,7 @@ class GameSessionService:
                 "sessionId": session_id,
                 "geminiModel": options.gemini_model,
                 "hasGeminiKey": bool(options.gemini_api_key),
+                "storySetupId": story_setup.id,
             },
             response.model_dump(mode="json", by_alias=True),
             context={"sessionId": session_id, "turn": 0},
@@ -94,8 +116,9 @@ class GameSessionService:
             state = session.state
             story_agent = session.story_agent
             history = list(session.history)
+            story_setup = session.story_setup
         history.append(StoryMessage(role="player", content=input_text))
-        turn = story_agent.advance(state, history, input_text)
+        turn = story_agent.advance(state, history, input_text, story_setup)
         history.append(StoryMessage(role="assistant", content=turn.narrative))
         with self.lock:
             self.sessions[payload.session_id] = SessionRecord(
@@ -103,17 +126,19 @@ class GameSessionService:
                 story_agent=story_agent,
                 history=history,
                 choices=turn.choices,
+                story_setup=story_setup,
             )
         response = ActionResponse(
             narrative=turn.narrative,
             choices=turn.choices,
             engineResult=turn.engine_result,
             state=turn.state,
+            storySetupId=story_setup.id,
         )
         if turn.action is not None:
             log_intent_result(
                 "/game/action",
-                {"player_input": input_text},
+                {"player_input": input_text, "storySetupId": story_setup.id},
                 {
                     "action": turn.action.model_dump(mode="json"),
                     "confidence": 1.0,
@@ -128,7 +153,7 @@ class GameSessionService:
             )
         log_narrative_result(
             "/game/action",
-            {"player_input": input_text, "history_length": len(history)},
+            {"player_input": input_text, "history_length": len(history), "storySetupId": story_setup.id},
             turn.model_dump(mode="json", by_alias=True),
             context={"sessionId": payload.session_id, "turn": turn.state.meta.turn},
         )
@@ -146,7 +171,8 @@ class GameSessionService:
             if session is None:
                 raise SessionNotFoundError(session_id)
             state = session.state
-        response = StateResponse(state=state)
+            story_setup_id = session.story_setup.id
+        response = StateResponse(state=state, storySetupId=story_setup_id)
         log_game_result("/game/state", {"sessionId": session_id}, response.model_dump(mode="json"))
         return response
 
@@ -205,6 +231,16 @@ class GameSessionService:
             llm_client=build_llm_client(settings),
             retrieval=self.default_story_agent.retrieval,
         )
+
+    def available_story_setups(self) -> tuple[list[StorySetup], str]:
+        return list(self.story_setups), self.story_setup_source
+
+    def _select_story_setup(self, story_setup_id: str | None) -> StorySetup:
+        if story_setup_id:
+            for preset in self.story_setups:
+                if preset.id == story_setup_id:
+                    return preset
+        return self.story_setups[0]
 
     def _game_started_engine_result(self):
         from app.schemas.common import EngineResult
