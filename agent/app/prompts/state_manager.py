@@ -13,6 +13,7 @@ def build_state_manager_prompts(request: StoryTransitionProposalRequest) -> tupl
             "Return valid JSON only.",
             "State changes must be small, local, and consistent with the current canon state.",
             "Choice candidates must be concise Korean strings.",
+            "Different action types must produce meaningfully different proposals.",
         ]
     )
     payload = {
@@ -26,6 +27,11 @@ def build_state_manager_prompts(request: StoryTransitionProposalRequest) -> tupl
             "Do not rewrite the entire state.",
             "Discovered facts must be facts the player could plausibly learn this turn.",
             "Choice candidates should suggest 2 to 4 next moves.",
+            "INVESTIGATE should reveal clues or signal that the area is exhausted.",
+            "TALK should change social information, trust, or disclosed facts.",
+            "MOVE should emphasize entering pressure, risk, or opportunity in a new place.",
+            "REST and USE_ITEM should reorganize resources or clarity more than story stage.",
+            "If the player repeats the same ineffective action, mark the scene as stalled instead of inventing major progress.",
         ],
         "output_schema": {
             "scene_summary": "string",

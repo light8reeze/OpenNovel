@@ -75,7 +75,6 @@ class StoryStateManagerAgent:
         state_patch: dict[str, object] = {}
         discovered: list[str] = []
         scene_summary = world_blueprint.opening_hook
-        choices = self._choices_for_state(state)
         risk_tags: list[str] = [f"proposal_fallback:{reason}"]
         location_label = self._location_label(world_blueprint, state.player.location_id)
 
@@ -84,10 +83,8 @@ class StoryStateManagerAgent:
             target_label = self._location_label(world_blueprint, intent.target)
             scene_summary = f"{target_label} 쪽으로 전진하면서 {world_blueprint.core_conflict}의 징후가 조금 더 가까워진다."
         elif intent.action_type == ActionType.INVESTIGATE:
-            next_stage = min(6, state.quests.story_arc.stage + 1)
-            state_patch = {"quests": {"story_arc": {"stage": next_stage}}}
-            discovered = [f"{location_label}에서 새로운 단서를 발견했다."]
-            scene_summary = f"{location_label}에서 상황을 더 읽을 수 있는 단서를 발견한다."
+            scene_summary = f"{location_label}에서 새로운 흔적이 있는지 더 세밀하게 살핀다."
+            discovered = [f"{location_label}에서 새롭게 눈에 띄는 흔적이 있는지 확인했다."]
         elif intent.action_type == ActionType.TALK:
             npc_id = self._npc_id_for_location(world_blueprint, state.player.location_id)
             if npc_id:
@@ -109,7 +106,7 @@ class StoryStateManagerAgent:
             scene_summary=scene_summary,
             state_patch=state_patch,
             discovered_facts=discovered,
-            choice_candidates=choices,
+            choice_candidates=self._choices_for_state(state, world_blueprint),
             risk_tags=risk_tags,
             source="state_manager_fallback",
             provider=self.settings.provider,
@@ -117,8 +114,25 @@ class StoryStateManagerAgent:
             used_fallback=True,
         )
 
-    def _choices_for_state(self, state: GameState) -> list[str]:
-        return ["주변을 조사한다", "다음 구역으로 이동한다", "잠시 상황을 정리한다"]
+    def _choices_for_state(self, state: GameState, world_blueprint: WorldBlueprint) -> list[str]:
+        choices: list[str] = []
+        location_label = self._location_label(world_blueprint, state.player.location_id)
+        choices.append(f"{location_label} 주변을 조사한다")
+        for npc in world_blueprint.npcs:
+            if npc.home_location_id == state.player.location_id:
+                choices.append(f"{npc.label}{self._topic_particle(npc.label)} 대화한다")
+                break
+        current = next((location for location in world_blueprint.locations if location.id == state.player.location_id), None)
+        if current:
+            for connection in current.connections[:2]:
+                target_label = self._location_label(world_blueprint, connection)
+                choices.append(f"{target_label}{self._direction_particle(target_label)} 이동한다")
+        choices.append("잠시 숨을 고르며 상황을 정리한다")
+        deduped: list[str] = []
+        for choice in choices:
+            if choice not in deduped:
+                deduped.append(choice)
+        return deduped[:4]
 
     def _npc_id_for_location(self, world_blueprint: WorldBlueprint, location_id: str) -> str | None:
         for npc in world_blueprint.npcs:
@@ -131,3 +145,20 @@ class StoryStateManagerAgent:
             if location.id == location_id:
                 return location.label
         return location_id
+
+    def _topic_particle(self, text: str) -> str:
+        if not text:
+            return "와"
+        last = text[-1]
+        if not ("\uac00" <= last <= "\ud7a3"):
+            return "와"
+        return "과" if (ord(last) - ord("\uac00")) % 28 else "와"
+
+    def _direction_particle(self, text: str) -> str:
+        if not text:
+            return "로"
+        last = text[-1]
+        if not ("\uac00" <= last <= "\ud7a3"):
+            return "로"
+        jong = (ord(last) - ord("\uac00")) % 28
+        return "으로" if jong not in (0, 8) else "로"

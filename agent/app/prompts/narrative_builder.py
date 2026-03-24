@@ -35,6 +35,7 @@ def build_narrative_prompts(
 - 이번 턴의 장면은 반드시 한 걸음 전진해야 한다.
 - 세계관에 없는 던전 상투어를 임의로 끌어오지 마라.
 - validated_scene_summary가 있으면 그 장면 방향과 사건 결과를 우선 반영하라.
+- progress_kind가 stalled이면 억지 진전을 만들지 말고, 왜 정체되었는지 자연스럽게 드러내라.
 - 선택지는 서로 다른 접근법처럼 보이게 구성하라.
 """
 
@@ -52,6 +53,7 @@ Story Objective:
 Current Scene:
 - kind: {kind}
 - phase: {scene_phase}
+- progress_kind: {request.progress_kind or "-"}
 - turn: {request.state_summary.turn}
 - location_id: {request.state_summary.location_id}
 - location_name: {request.scene_context.location_name}

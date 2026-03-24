@@ -287,6 +287,7 @@ function renderTurnDetail(node, debugData = null) {
   const validationFlags = debugData?.intentResponse?.validation_flags || [];
   const safetyFlags = debugData?.narrativeResponse?.safety_flags || [];
   const validatorFlags = debugData?.validationResponse?.validation_flags || [];
+  const progressKind = debugData?.validationResponse?.progress_kind || "n/a";
   const worldTitle = debugData?.worldBuildResponse?.blueprint?.title || "n/a";
 
   turnDetailEl.className = "turn-detail";
@@ -307,6 +308,10 @@ function renderTurnDetail(node, debugData = null) {
       <div>
         <p class="detail-label">Location</p>
         <p class="detail-value">${node.locationId}</p>
+      </div>
+      <div>
+        <p class="detail-label">Progress</p>
+        <p class="detail-value">${progressKind}</p>
       </div>
     </div>
     <div class="detail-block">
@@ -462,6 +467,7 @@ function renderHoverMarkup(node, data) {
   const proposalTokens = formatTokenUsage(data.stateProposalResponse?.token_usage || data.sessionTokenUsage?.stateProposal);
   const narrativeTokens = formatTokenUsage(data.narrativeResponse?.token_usage);
   const validatorFlags = (data.validationResponse?.validation_flags || []).join(", ") || "none";
+  const progressKind = data.validationResponse?.progress_kind || "n/a";
   const worldTitle = data.worldBuildResponse?.blueprint?.title || "n/a";
 
   return `
@@ -473,6 +479,7 @@ function renderHoverMarkup(node, data) {
       <dt>Provider</dt><dd>${escapeHtml(provider)}</dd>
       <dt>Model</dt><dd>${escapeHtml(model)}</dd>
       <dt>Fallback</dt><dd>${fallback}</dd>
+      <dt>Progress</dt><dd>${escapeHtml(progressKind)}</dd>
       <dt>Turn Tokens</dt><dd>${escapeHtml(turnTokens)}</dd>
       <dt>Session Tokens</dt><dd>${escapeHtml(sessionTokens)}</dd>
       <dt>Intent Flags</dt><dd>${escapeHtml(intentFlags)}</dd>

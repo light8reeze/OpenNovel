@@ -42,6 +42,10 @@ def render_turn(request: NarrativeRequest) -> NarrativeResponse:
         message_code,
         f"{request.scene_context.location_name}의 공기가 미세하게 흔들리며 다음 반응을 기다리고 있다.",
     )
+    if request.progress_kind == "stalled":
+        narrative = request.scene_summary or (
+            f"{request.scene_context.location_name}에서는 이미 확인한 단서와 분위기가 되풀이되고 있어, 다른 접근이 더 필요해 보인다."
+        )
     if request.discovery_log:
         latest = request.discovery_log[-1].rstrip(". ")
         if latest and latest not in narrative:

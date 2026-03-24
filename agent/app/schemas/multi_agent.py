@@ -91,5 +91,6 @@ class ValidationResult(BaseModel):
     allowed_choices: list[str] = Field(default_factory=list)
     discovery_log: list[str] = Field(default_factory=list)
     scene_summary: str = ""
+    progress_kind: str = "continue"
     validation_flags: list[str] = Field(default_factory=list)
     source: str = "validator"

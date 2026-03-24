@@ -29,6 +29,7 @@ def test_narrative_prompt_uses_story_arc_and_world_context() -> None:
             ending_reached=None,
             details=["found_smuggling_mark"],
         ),
+        progress_kind="investigate",
         allowed_choices=["주변을 조사한다", "항구 경비와 대화한다", "밀수 창고로 이동한다"],
         world_title="잿빛 항구 도시",
         world_summary="비와 안개가 뒤섞인 항구 도시에서 실종 사건과 검은 거래가 얽혀 있다.",
@@ -45,6 +46,7 @@ def test_narrative_prompt_uses_story_arc_and_world_context() -> None:
 
     assert "validator가 확정한 결과" in system_prompt
     assert "잿빛 항구 도시" in user_prompt
+    assert "progress_kind: investigate" in user_prompt
     assert "story_arc_stage: 2" in user_prompt
     assert "안개 골목" in user_prompt
     assert "밀수 창고" in user_prompt
@@ -66,6 +68,7 @@ def test_opening_narrative_prompt_uses_opening_hook() -> None:
             npcs_in_scene=["항구 경비"],
             visible_targets=["안개 골목", "항구 경비", "횃불"],
         ),
+        progress_kind="opening",
         allowed_choices=["주변을 조사한다", "항구 경비와 대화한다", "안개 골목으로 이동한다"],
         world_title="잿빛 항구 도시",
         world_summary="비와 안개가 뒤섞인 항구 도시에서 실종 사건과 검은 거래가 얽혀 있다.",

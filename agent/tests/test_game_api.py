@@ -62,6 +62,8 @@ def test_game_choices_returns_current_suggestions_only_on_request() -> None:
         "collapsed_hall" not in choice and "trap_chamber" not in choice and "caretaker" not in choice
         for choice in choices_payload["choices"]
     )
+    assert any("조사" in choice for choice in choices_payload["choices"])
+    assert any("이동" in choice for choice in choices_payload["choices"])
 
 
 def test_start_game_falls_back_to_default_story_setup_for_unknown_id() -> None:
@@ -122,6 +124,51 @@ def test_story_agent_progresses_session_without_engine() -> None:
     assert final_state["quests"]["story_arc"]["stage"] >= 1
     assert final_state["player"]["gold"] == 15
     assert payload["engineResult"]["ending_reached"] is None
+
+
+def test_repeated_investigate_eventually_stalls_in_same_location() -> None:
+    presets = client.get("/story-setups").json()["presets"]
+    start = client.post("/game/start", json={"storySetupId": presets[0]["id"]}).json()
+    session_id = start["sessionId"]
+
+    progress_kinds: list[str] = []
+    stages: list[int] = []
+
+    for turn in range(1, 5):
+        choices = client.get("/game/choices", params={"sessionId": session_id}).json()["choices"]
+        investigate_choice = next((choice for choice in choices if "조사" in choice), "주변을 조사한다")
+        payload = client.post("/game/action", json={"sessionId": session_id, "choiceText": investigate_choice}).json()
+        stages.append(payload["state"]["quests"]["story_arc"]["stage"])
+        bundle = client.get("/debug/turn-log", params={"sessionId": session_id, "turn": turn}).json()
+        progress_kinds.append(bundle["validationResponse"]["progress_kind"])
+
+    assert "investigate" in progress_kinds
+    assert "stalled" in progress_kinds
+    assert stages[-1] <= stages[0] + 1
+
+
+def test_talk_and_move_create_different_progress_kinds() -> None:
+    presets = client.get("/story-setups").json()["presets"]
+    start = client.post("/game/start", json={"storySetupId": presets[0]["id"]}).json()
+    session_id = start["sessionId"]
+
+    choices = client.get("/game/choices", params={"sessionId": session_id}).json()["choices"]
+    talk_choice = next((choice for choice in choices if "대화" in choice), None)
+    move_choice = next((choice for choice in choices if "이동" in choice), None)
+
+    if talk_choice:
+        client.post("/game/action", json={"sessionId": session_id, "choiceText": talk_choice})
+        talk_bundle = client.get("/debug/turn-log", params={"sessionId": session_id, "turn": 1}).json()
+        assert talk_bundle["validationResponse"]["progress_kind"] in {"talk", "stalled"}
+
+    if move_choice:
+        client.post("/game/action", json={"sessionId": session_id, "choiceText": move_choice})
+        move_turn = 2 if talk_choice else 1
+        move_bundle = client.get("/debug/turn-log", params={"sessionId": session_id, "turn": move_turn}).json()
+        assert move_bundle["validationResponse"]["progress_kind"] in {"move", "reposition", "stalled"}
+
+    if talk_choice and move_choice:
+        assert talk_bundle["validationResponse"]["progress_kind"] != move_bundle["validationResponse"]["progress_kind"]
 
 
 def test_frontend_shell_is_served_from_agent() -> None:
