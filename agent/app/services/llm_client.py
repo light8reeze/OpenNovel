@@ -107,18 +107,13 @@ class OpenAICompatibleClient(BaseLlmClient):
             )
             raise LlmError(f"openai-compatible response shape invalid: {error}") from error
 
-        try:
-            parsed = json.loads(content)
-        except json.JSONDecodeError as error:
-            log_llm_error(
-                role="provider",
-                provider=self.settings.provider,
-                model=self.settings.model,
-                stage="response_json_parse",
-                error=str(error),
-                extra={"schema_name": schema_name, "content_preview": content[:400]},
-            )
-            raise LlmError(f"openai-compatible content was not valid json: {error}") from error
+        parsed = _parse_json_response_text(
+            provider=self.settings.provider,
+            model=self.settings.model,
+            schema_name=schema_name,
+            text=content,
+            error_prefix="openai-compatible content was not valid json",
+        )
 
         token_usage = _extract_openai_token_usage(response_json) or _estimate_token_usage(
             system_prompt,
@@ -186,20 +181,13 @@ class GeminiClient(BaseLlmClient):
             )
             raise LlmError(f"gemini response shape invalid: {error}") from error
 
-        try:
-            parsed = json.loads(text)
-        except json.JSONDecodeError as error:
-            parsed = _extract_json_object(text)
-            if parsed is None:
-                log_llm_error(
-                    role="provider",
-                    provider=self.settings.provider,
-                    model=self.settings.model,
-                    stage="response_json_parse",
-                    error=str(error),
-                    extra={"schema_name": schema_name, "content_preview": text[:400]},
-                )
-                raise LlmError(f"gemini content was not valid json: {error}") from error
+        parsed = _parse_json_response_text(
+            provider=self.settings.provider,
+            model=self.settings.model,
+            schema_name=schema_name,
+            text=text,
+            error_prefix="gemini content was not valid json",
+        )
 
         token_usage = _extract_gemini_token_usage(response_json) or _estimate_token_usage(
             system_prompt,
@@ -353,6 +341,57 @@ def _extract_json_object(text: str) -> dict[str, Any] | None:
             return json.loads(repaired)
         except json.JSONDecodeError:
             return None
+
+
+def _parse_json_response_text(
+    provider: str,
+    model: str,
+    schema_name: str,
+    text: str,
+    error_prefix: str,
+) -> dict[str, Any]:
+    stripped = text.strip()
+    if not stripped:
+        error = "empty response text"
+        log_llm_error(
+            role="provider",
+            provider=provider,
+            model=model,
+            stage="response_json_parse",
+            error=error,
+            extra={"schema_name": schema_name, "content_preview": text[:400]},
+        )
+        raise LlmError(f"{error_prefix}: {error}")
+
+    parsed = _extract_json_object(stripped)
+    if parsed is not None:
+        return parsed
+
+    try:
+        candidate = json.loads(stripped)
+    except json.JSONDecodeError as error:
+        log_llm_error(
+            role="provider",
+            provider=provider,
+            model=model,
+            stage="response_json_parse",
+            error=str(error),
+            extra={"schema_name": schema_name, "content_preview": text[:400]},
+        )
+        raise LlmError(f"{error_prefix}: {error}") from error
+
+    if not isinstance(candidate, dict):
+        error = f"json root was {type(candidate).__name__}, expected object"
+        log_llm_error(
+            role="provider",
+            provider=provider,
+            model=model,
+            stage="response_json_shape",
+            error=error,
+            extra={"schema_name": schema_name, "content_preview": text[:400]},
+        )
+        raise LlmError(f"{error_prefix}: {error}")
+    return candidate
 
 
 def _is_retryable_http_error(error: httpx.HTTPError) -> bool:

@@ -2,25 +2,34 @@ from app.schemas.narrative import NarrativeRequest, NarrativeResponse
 
 
 OPENING_TEXT = (
-    "{location_name}. 축축한 밤공기와 무너진 석재 사이로 오래 잠든 유적의 냄새가 스며 나온다. "
-    "입구 아래로는 횃불빛조차 삼켜 버릴 것 같은 어둠이 천천히 입을 벌리고 있다."
+    "{world_title}. {opening_hook} "
+    "{world_summary}"
 )
 
 
 TURN_TEXT = {
     "MOVE_OK": "당신은 조심스럽게 발걸음을 옮긴다. 공기 결이 미세하게 바뀌며 장면이 넘어간다.",
-    "NOTHING_FOUND": "무너진 돌과 먼지를 훑어 보지만, 지금은 더 진행을 바꿀 만한 단서는 드러나지 않는다.",
-    "NO_USEFUL_DIALOGUE": "짧은 대화는 오가지만, 상황을 바꿀 만큼 새로운 정보는 나오지 않는다.",
+    "INVESTIGATE_PROGRESS": "주변의 흐름을 더듬다 보니 지금 장면을 다음 단계로 밀어 줄 작은 실마리가 드러난다.",
+    "DIALOGUE_PROGRESS": "짧은 대화가 오간 뒤, 상황을 보는 각도와 다음 움직임의 방향이 조금 더 선명해진다.",
     "NO_NPC_TO_TALK": "주변에는 말을 걸어도 응답할 상대가 보이지 않는다.",
     "REST_OK": "잠시 숨을 고르자 차가운 공기 속에서도 맥박이 조금 가라앉는다.",
-    "TORCH_LIT": "횃불 끝이 살아나며 주변의 금 간 벽면과 바닥의 먼지를 조금 더 또렷하게 비춘다.",
-    "RETREAT_IGNORED": "당장은 발길을 돌릴 뿐, 유적 자체가 특별한 결말을 허락하지는 않는다.",
+    "USE_ITEM_OK": "손에 쥔 도구를 써 보자 숨겨져 있던 질감과 단서가 조금 더 또렷해진다.",
+    "RETREAT_OK": "한 걸음 물러서며 방금까지의 압박과 다음 선택을 다시 가늠한다.",
 }
 
 
 def render_opening(request: NarrativeRequest) -> NarrativeResponse:
+    world_title = request.world_title or request.scene_context.location_name
+    opening_hook = request.opening_hook or f"{request.scene_context.location_name}에서 이야기가 시작된다."
+    world_summary = (request.world_summary or "").strip()
+    if world_summary:
+        world_summary = world_summary.split(".")[0].strip()
     return NarrativeResponse(
-        narrative=OPENING_TEXT.format(location_name=request.scene_context.location_name),
+        narrative=OPENING_TEXT.format(
+            world_title=world_title,
+            opening_hook=opening_hook,
+            world_summary=world_summary,
+        ).strip(),
         choices=request.allowed_choices[:4],
         source="template",
         used_fallback=True,
@@ -29,10 +38,18 @@ def render_opening(request: NarrativeRequest) -> NarrativeResponse:
 
 def render_turn(request: NarrativeRequest) -> NarrativeResponse:
     message_code = request.engine_result.message_code if request.engine_result else ""
-    narrative = TURN_TEXT.get(
+    narrative = request.scene_summary or TURN_TEXT.get(
         message_code,
-        "유적은 조용히 다음 반응을 기다리고 있다.",
+        f"{request.scene_context.location_name}의 공기가 미세하게 흔들리며 다음 반응을 기다리고 있다.",
     )
+    if request.progress_kind == "stalled":
+        narrative = request.scene_summary or (
+            f"{request.scene_context.location_name}에서는 이미 확인한 단서와 분위기가 되풀이되고 있어, 다른 접근이 더 필요해 보인다."
+        )
+    if request.discovery_log:
+        latest = request.discovery_log[-1].rstrip(". ")
+        if latest and latest not in narrative:
+            narrative = f"{narrative} {latest}."
     return NarrativeResponse(
         narrative=narrative,
         choices=request.allowed_choices[:4],

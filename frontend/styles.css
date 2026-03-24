@@ -34,7 +34,8 @@ body {
 .story-panel,
 .state-panel,
 .graph-panel,
-.detail-panel {
+.detail-panel,
+.debug-panel {
   background: linear-gradient(180deg, rgba(23, 28, 32, 0.96), rgba(15, 18, 20, 0.96));
   border: 1px solid var(--line);
   border-radius: 20px;
@@ -42,9 +43,38 @@ body {
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.28);
 }
 
+.story-panel {
+  position: relative;
+}
+
 .side-panel {
   display: grid;
   gap: 20px;
+}
+
+.side-tabs {
+  display: flex;
+  gap: 10px;
+}
+
+.side-tab {
+  flex: 1 1 0;
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--line);
+}
+
+.side-tab.is-active {
+  background: var(--accent-soft);
+  border-color: rgba(194, 77, 61, 0.5);
+}
+
+.side-tab-panel {
+  display: none;
+  gap: 20px;
+}
+
+.side-tab-panel.is-active {
+  display: grid;
 }
 
 .story-header {
@@ -109,6 +139,12 @@ h2 {
   margin-bottom: 16px;
 }
 
+.choice-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
 .choice,
 button,
 input,
@@ -128,6 +164,14 @@ button {
 
 .ghost {
   background: transparent;
+}
+
+button:disabled,
+.choice:disabled,
+input:disabled,
+select:disabled {
+  cursor: wait;
+  opacity: 0.6;
 }
 
 .input-row {
@@ -150,8 +194,53 @@ select {
   min-width: min(280px, 40vw);
 }
 
-#story-setup {
-  min-width: min(260px, 36vw);
+.loading-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(7, 8, 9, 0.64);
+  backdrop-filter: blur(3px);
+  border-radius: 20px;
+}
+
+.loading-overlay.hidden {
+  display: none;
+}
+
+.loading-card {
+  min-width: min(280px, calc(100% - 24px));
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 20px 24px;
+  border-radius: 18px;
+  border: 1px solid rgba(243, 239, 230, 0.14);
+  background: rgba(18, 22, 25, 0.94);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.4);
+}
+
+.spinner {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 3px solid rgba(243, 239, 230, 0.18);
+  border-top-color: var(--accent);
+  animation: spin 0.9s linear infinite;
+}
+
+.loading-message {
+  margin: 0;
+  color: var(--text);
+  text-align: center;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .panel-head {
@@ -271,6 +360,115 @@ select {
 
 .graph-hover.hidden {
   display: none;
+}
+
+.debug-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.debug-column {
+  min-width: 0;
+}
+
+.debug-heading {
+  margin: 0 0 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.debug-list,
+.debug-trace {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  min-height: 120px;
+}
+
+.debug-list.empty,
+.debug-trace.empty {
+  padding: 14px;
+  color: var(--muted);
+}
+
+.debug-item {
+  width: 100%;
+  text-align: left;
+  border-radius: 0;
+  border: 0;
+  border-bottom: 1px solid rgba(243, 239, 230, 0.08);
+  background: transparent;
+  padding: 12px 14px;
+}
+
+.debug-item:last-child {
+  border-bottom: 0;
+}
+
+.debug-item.is-active {
+  background: rgba(194, 77, 61, 0.12);
+}
+
+.debug-item-title {
+  display: block;
+  font-weight: 700;
+}
+
+.debug-item-meta {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.debug-trace-wrap {
+  min-width: 0;
+}
+
+.trace-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.trace-stage + .trace-stage {
+  margin-top: 14px;
+}
+
+.trace-stage-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.trace-stage-title {
+  margin: 0;
+  font-size: 14px;
+}
+
+.trace-stage-meta {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.trace-pre {
+  margin: 0;
+  padding: 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(243, 239, 230, 0.08);
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1.45;
+  overflow: auto;
 }
 
 .hover-title,
@@ -397,5 +595,10 @@ dd {
 
   .detail-grid {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .debug-layout,
+  .trace-meta {
+    grid-template-columns: 1fr;
   }
 }

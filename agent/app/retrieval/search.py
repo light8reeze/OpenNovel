@@ -20,7 +20,7 @@ class RetrievalService:
             hit
             for hit in raw_hits
             if self._matches_location(hit.metadata, request.state_summary.location_id)
-            and self._matches_stage(hit.metadata, request.state_summary.sunken_ruins_stage)
+            and self._matches_stage(hit.metadata, request.state_summary.story_arc_stage)
         ]
         return RetrievalContext(used=bool(filtered), query=query, hits=filtered[: self.settings.vector_store.top_k])
 
