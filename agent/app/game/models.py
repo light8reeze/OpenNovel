@@ -35,7 +35,7 @@ class QuestProgress(BaseModel):
 
 
 class QuestState(BaseModel):
-    sunken_ruins: QuestProgress
+    story_arc: QuestProgress
 
 
 class RelationsState(BaseModel):
@@ -57,7 +57,7 @@ class GameState(BaseModel):
             location_id=self.player.location_id,
             hp=self.player.hp,
             gold=self.player.gold,
-            sunken_ruins_stage=self.quests.sunken_ruins.stage,
+            story_arc_stage=self.quests.story_arc.stage,
             player_flags=list(self.player.flags),
         )
 
@@ -113,6 +113,14 @@ class StateResponse(BaseModel):
     story_setup_id: Optional[str] = Field(default=None, alias="storySetupId")
 
 
+class ChoicesResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    session_id: str = Field(alias="sessionId")
+    choices: list[str] = Field(default_factory=list)
+    story_setup_id: Optional[str] = Field(default=None, alias="storySetupId")
+
+
 class Location(BaseModel):
     id: str
     name: str
@@ -142,7 +150,7 @@ class QuestDefinition(BaseModel):
 class ContentBundle(BaseModel):
     locations: list[Location]
     npcs: list[Npc]
-    sunken_ruins: QuestDefinition
+    story_arc: QuestDefinition
 
     @classmethod
     def load_from_disk(cls, root: Path) -> "ContentBundle":
@@ -150,7 +158,7 @@ class ContentBundle(BaseModel):
 
         locations = [Location.model_validate(item) for item in json.loads((root / "locations.json").read_text(encoding="utf-8"))]
         npcs = [Npc.model_validate(item) for item in json.loads((root / "npcs.json").read_text(encoding="utf-8"))]
-        sunken_ruins = QuestDefinition.model_validate(
+        story_arc = QuestDefinition.model_validate(
             json.loads((root / "quests" / "sunken_ruins.json").read_text(encoding="utf-8"))
         )
         location_ids = {location.id for location in locations}
@@ -161,7 +169,7 @@ class ContentBundle(BaseModel):
         for npc in npcs:
             if npc.location_id not in location_ids:
                 raise ValueError(f"npc '{npc.id}' references unknown location '{npc.location_id}'")
-        return cls(locations=locations, npcs=npcs, sunken_ruins=sunken_ruins)
+        return cls(locations=locations, npcs=npcs, story_arc=story_arc)
 
     def location_name(self, location_id: str) -> str:
         for location in self.locations:
@@ -199,15 +207,15 @@ def initial_state() -> GameState:
         player=PlayerState(
             hp=100,
             gold=15,
-            location_id="ruins_entrance",
+            location_id="opening_location",
             inventory=dict(Counter({"torch": 1})),
             flags=[],
         ),
         world=WorldState(
             time="night",
-            global_flags=["sunken_ruins_open"],
-            alert_by_region={"ruins": 6},
+            global_flags=[],
+            alert_by_region={},
         ),
-        quests=QuestState(sunken_ruins=QuestProgress(stage=0)),
-        relations=RelationsState(npc_affinity={"caretaker": 5}),
+        quests=QuestState(story_arc=QuestProgress(stage=0)),
+        relations=RelationsState(npc_affinity={}),
     )

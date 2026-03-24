@@ -43,3 +43,5 @@ __pycache__/
 *.egg-info/
 build/
 .chroma/
+.artifacts/
+artifacts/

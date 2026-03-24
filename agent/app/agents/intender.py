@@ -86,36 +86,29 @@ class IntenderAgent:
         target = None
         confidence = 0.55
 
-        if any(token in normalized for token in ("회랑", "hall")):
-            action_type = ActionType.MOVE
-            target = "hall"
-            confidence = 0.92
-        elif any(token in normalized for token in ("함정방", "함정", "trap room", "trap")):
-            action_type = ActionType.MOVE
-            target = "trap_room"
-            confidence = 0.92
-        elif any(token in normalized for token in ("성소", "제단", "sanctum", "altar")):
-            action_type = ActionType.MOVE
-            target = "sanctum"
-            confidence = 0.92
-        elif any(token in normalized for token in ("입구", "entrance", "되돌아", "돌아간다")):
-            action_type = ActionType.MOVE
-            target = "ruins_entrance"
-            confidence = 0.88
-        elif any(token in normalized for token in ("관리인", "안내자", "caretaker", "대화", "talk")):
-            action_type = ActionType.TALK
-            target = "caretaker"
-            confidence = 0.94
-        elif any(token in normalized for token in ("휴식", "rest")):
+        if any(token in normalized for token in ("휴식", "쉰다", "rest")):
             action_type = ActionType.REST
             confidence = 0.86
-        elif any(token in normalized for token in ("횃불", "torch")):
+        elif any(token in normalized for token in ("횃불", "torch", "등불", "lamp")):
             action_type = ActionType.USE_ITEM
-            target = "torch"
+            target = "횃불"
             confidence = 0.84
         elif any(token in normalized for token in ("도망", "후퇴", "retreat", "flee")):
             action_type = ActionType.FLEE
             confidence = 0.83
+        elif any(self._matches_label(normalized, npc) for npc in request.scene_context.npcs_in_scene) or any(
+            token in normalized for token in ("대화", "말을 건다", "talk")
+        ):
+            action_type = ActionType.TALK
+            target = request.scene_context.npcs_in_scene[0] if request.scene_context.npcs_in_scene else None
+            confidence = 0.94
+        else:
+            for visible_target in request.scene_context.visible_targets:
+                if self._matches_label(normalized, visible_target):
+                    action_type = ActionType.MOVE
+                    target = visible_target
+                    confidence = 0.9
+                    break
 
         return IntentValidationResponse(
             action=Action(action_type=action_type, target=target, raw_input=request.player_input),
@@ -127,3 +120,10 @@ class IntenderAgent:
             retrieval_used=context.used,
             retrieved_document_ids=context.document_ids,
         )
+
+    def _matches_label(self, normalized_input: str, label: str) -> bool:
+        lowered = label.lower()
+        if lowered in normalized_input:
+            return True
+        parts = [part for part in lowered.replace("(", " ").replace(")", " ").replace("-", " ").split() if len(part) >= 2]
+        return any(part in normalized_input for part in parts)

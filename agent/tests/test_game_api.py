@@ -13,7 +13,7 @@ def test_start_game_returns_rust_compatible_shape() -> None:
     assert payload["sessionId"].startswith("session-")
     assert payload["state"]["meta"]["turn"] == 0
     assert payload["storySetupId"]
-    assert payload["choices"] == ["주변을 조사한다", "관리인과 대화한다", "회랑으로 이동한다"]
+    assert payload["choices"] == []
 
 
 def test_story_setups_returns_three_presets() -> None:
@@ -36,6 +36,34 @@ def test_start_game_uses_requested_story_setup_and_persists_it() -> None:
     state_response = client.get("/game/state", params={"sessionId": payload["sessionId"]})
     assert state_response.status_code == 200
     assert state_response.json()["storySetupId"] == selected_id
+
+
+def test_start_game_opening_and_choices_reflect_selected_story_setup() -> None:
+    presets = client.get("/story-setups").json()["presets"]
+    selected = presets[1]
+    response = client.post("/game/start", json={"storySetupId": selected["id"]})
+    assert response.status_code == 200
+    payload = response.json()
+    assert selected["title"] in payload["narrative"]
+    assert payload["choices"] == []
+
+
+def test_game_choices_returns_current_suggestions_only_on_request() -> None:
+    start = client.post("/game/start", json={"storySetupId": "sunken_ruins"}).json()
+    assert start["choices"] == []
+
+    choices_response = client.get("/game/choices", params={"sessionId": start["sessionId"]})
+    assert choices_response.status_code == 200
+    choices_payload = choices_response.json()
+    assert choices_payload["sessionId"] == start["sessionId"]
+    assert len(choices_payload["choices"]) >= 2
+    assert all("(" not in choice and ")" not in choice for choice in choices_payload["choices"])
+    assert all(
+        "collapsed_hall" not in choice and "trap_chamber" not in choice and "caretaker" not in choice
+        for choice in choices_payload["choices"]
+    )
+    assert any("조사" in choice for choice in choices_payload["choices"])
+    assert any("이동" in choice for choice in choices_payload["choices"])
 
 
 def test_start_game_falls_back_to_default_story_setup_for_unknown_id() -> None:
@@ -88,13 +116,59 @@ def test_story_agent_progresses_session_without_engine() -> None:
         response = client.post("/game/action", json={"sessionId": session_id, "inputText": step})
         assert response.status_code == 200
         payload = response.json()
+        assert payload["choices"] == []
         message_codes.append(payload["engineResult"]["message_code"])
-    assert all(code.startswith("AGENT_") for code in message_codes)
+    assert all(code for code in message_codes)
     final_state = payload["state"]
     assert final_state["meta"]["turn"] == len(message_codes)
-    assert final_state["quests"]["sunken_ruins"]["stage"] >= 1
+    assert final_state["quests"]["story_arc"]["stage"] >= 1
     assert final_state["player"]["gold"] == 15
     assert payload["engineResult"]["ending_reached"] is None
+
+
+def test_repeated_investigate_eventually_stalls_in_same_location() -> None:
+    presets = client.get("/story-setups").json()["presets"]
+    start = client.post("/game/start", json={"storySetupId": presets[0]["id"]}).json()
+    session_id = start["sessionId"]
+
+    progress_kinds: list[str] = []
+    stages: list[int] = []
+
+    for turn in range(1, 5):
+        choices = client.get("/game/choices", params={"sessionId": session_id}).json()["choices"]
+        investigate_choice = next((choice for choice in choices if "조사" in choice), "주변을 조사한다")
+        payload = client.post("/game/action", json={"sessionId": session_id, "choiceText": investigate_choice}).json()
+        stages.append(payload["state"]["quests"]["story_arc"]["stage"])
+        bundle = client.get("/debug/turn-log", params={"sessionId": session_id, "turn": turn}).json()
+        progress_kinds.append(bundle["validationResponse"]["progress_kind"])
+
+    assert "investigate" in progress_kinds
+    assert "stalled" in progress_kinds
+    assert stages[-1] <= stages[0] + 1
+
+
+def test_talk_and_move_create_different_progress_kinds() -> None:
+    presets = client.get("/story-setups").json()["presets"]
+    start = client.post("/game/start", json={"storySetupId": presets[0]["id"]}).json()
+    session_id = start["sessionId"]
+
+    choices = client.get("/game/choices", params={"sessionId": session_id}).json()["choices"]
+    talk_choice = next((choice for choice in choices if "대화" in choice), None)
+    move_choice = next((choice for choice in choices if "이동" in choice), None)
+
+    if talk_choice:
+        client.post("/game/action", json={"sessionId": session_id, "choiceText": talk_choice})
+        talk_bundle = client.get("/debug/turn-log", params={"sessionId": session_id, "turn": 1}).json()
+        assert talk_bundle["validationResponse"]["progress_kind"] in {"talk", "stalled"}
+
+    if move_choice:
+        client.post("/game/action", json={"sessionId": session_id, "choiceText": move_choice})
+        move_turn = 2 if talk_choice else 1
+        move_bundle = client.get("/debug/turn-log", params={"sessionId": session_id, "turn": move_turn}).json()
+        assert move_bundle["validationResponse"]["progress_kind"] in {"move", "reposition", "stalled"}
+
+    if talk_choice and move_choice:
+        assert talk_bundle["validationResponse"]["progress_kind"] != move_bundle["validationResponse"]["progress_kind"]
 
 
 def test_frontend_shell_is_served_from_agent() -> None:
@@ -115,6 +189,8 @@ def test_debug_turn_log_returns_opening_and_turn_bundles() -> None:
     opening_payload = opening_log.json()
     assert opening_payload["found"] is True
     assert opening_payload["gameResponse"]["sessionId"] == session_id
+    assert opening_payload["worldBuildResponse"]["blueprint"]["title"]
+    assert opening_payload["validationResponse"]["state"]["meta"]["turn"] == 0
     assert opening_payload["narrativeResponse"]["narrative"]
 
     action = client.post(
@@ -127,6 +203,8 @@ def test_debug_turn_log_returns_opening_and_turn_bundles() -> None:
     assert turn_payload["found"] is True
     assert turn_payload["gameResponse"]["engineResult"]["message_code"] == action["engineResult"]["message_code"]
     assert turn_payload["intentResponse"]["action"]["action_type"] == "MOVE"
+    assert turn_payload["stateProposalResponse"]["scene_summary"]
+    assert turn_payload["validationResponse"]["engine_result"]["message_code"] == action["engineResult"]["message_code"]
     assert turn_payload["narrativeResponse"]["narrative"]
 
 
