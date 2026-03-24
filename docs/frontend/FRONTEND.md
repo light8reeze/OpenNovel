@@ -1,208 +1,153 @@
 # FRONTEND.md
 
-OpenNovel – Frontend Development Guide
+OpenNovel Frontend Guide
 
----
+## 1. Overview
 
-# 1. 프로젝트 개요
+현재 `main`의 frontend는 Python `agent` 서버가 정적 파일로 직접 서빙하는 단일 페이지 UI다.
 
-OpenNovel은 **플레이어가 소설 속 주인공이 되어 이야기를 진행하는 텍스트 기반 게임 서비스**이다.
+전체 흐름:
 
-사용자는 채팅 인터페이스를 통해 행동을 입력하고, AI는 스토리 진행 및 세계 상태를 기반으로 다음 장면을 생성한다.
-
-현재 구현 기준 전체 흐름은 다음과 같다.
-
+```text
+User Input
+  -> Backend API
+  -> StoryAgent
+  -> Story Response
+  -> UI Update
 ```
-User Input → Backend API → Story Agent → Story Response → UI
-```
 
-프론트엔드는 **채팅 기반 인터페이스, 턴 누적 스토리 그래프, 게임 상태 시각화**를 담당한다.
+프론트는 다음 역할을 맡는다.
+- story log 출력
+- choice 버튼 렌더링
+- player input 전송
+- 상태 패널 표시
+- turn graph 표시
+- 개발 모드 debug hover 표시
 
----
+## 2. Stack
 
-# 2. MVP 목표
+현재 구현:
 
-프론트엔드 MVP 목표:
-
-1. 채팅 기반 인터페이스 제공
-2. 플레이어 입력 처리
-3. AI 응답 출력
-4. 간단한 게임 상태 표시
-5. 턴 누적 스토리 그래프 표시
-6. 개발 모드용 hover 디버그 로그 확인
-
-초기 버전에서는 다음 기능은 제외한다.
-
-* 멀티플레이
-* 복잡한 UI
-* 그래픽 렌더링
-* 실시간 동기화
-
----
-# 3. 프론트엔드 기술 스택
-
-현재 구현 선택
-
-```
+```text
 Plain HTML + CSS + Vanilla JavaScript
 ```
 
-설명
+실제 파일:
+- [frontend/index.html](/Users/light8reeze/Documents/Projects/OpenNovel/frontend/index.html)
+- [frontend/app.js](/Users/light8reeze/Documents/Projects/OpenNovel/frontend/app.js)
+- [frontend/styles.css](/Users/light8reeze/Documents/Projects/OpenNovel/frontend/styles.css)
 
-* Python `agent` 서버가 정적 파일을 직접 서빙한다.
-* 프론트는 `frontend/index.html`, `frontend/app.js`, `frontend/styles.css`로 구성된다.
-* React / Next.js 구조는 아직 도입되지 않았다.
+React / TypeScript는 아직 도입되지 않았다.
 
----
+## 3. Current Layout
 
-# 4. 현재 구조
-
-```
-frontend/
-  index.html
-  app.js
-  styles.css
-```
-
----
-
-# 5. UI 구조
-
-## 5.1 Game Layout
-
-기본 레이아웃
-
-```
+```text
 +--------------------------------------+---------------------------+
-|           Story View                 |      Game State Panel     |
-|                                      |      Story Graph          |
-|  AI가 생성한 소설 내용 표시          |      Turn Detail          |
-|                                      |                           |
+| Story View                           | Game State Panel          |
+|                                      | Story Graph               |
+| Narrative log                        | Turn Detail               |
 +--------------------------------------+---------------------------+
-| Player Input                        |
-| [________________________________]  |
-|             [Send]                  |
-+--------------------------------------+
+| Choice Buttons / Player Input / Start Controls                |
++---------------------------------------------------------------+
 ```
 
-추가 설명
+현재 주요 UI 요소:
+- story setup selector
+- Gemini API Key 입력
+- 새 세션 시작 버튼
+- story log
+- choice buttons
+- player input form
+- state panel
+- story graph
+- graph hover debug
 
-* `Story Graph`는 turn 단위 노드를 시간순으로 누적한다.
-* 노드를 클릭하면 `Turn Detail` 패널에 해당 턴 narrative와 state 요약이 표시된다.
-* 개발 모드에서는 노드 hover 시 request/response debug 로그를 확인할 수 있다.
+## 4. Client State
 
----
+현재 `frontend/app.js`가 관리하는 핵심 상태:
+- `sessionId`
+- `turnHistory`
+- `selectedTurnId`
+- `debugUiEnabled`
+- `storySetups`
+- `selectedStorySetupId`
+- Gemini API key 입력값
 
-# 6. 주요 컴포넌트
+브라우저 저장:
+- `sessionId` -> `localStorage`
+- Gemini API key -> `localStorage`
+- 선택한 `storySetupId` -> `localStorage`
 
-## InputBox
+## 5. Start Flow
 
-플레이어 입력 UI
+앱 로드 시:
+1. `GET /health`
+2. `GET /story-setups`
+3. selector를 story setup 목록으로 채움
 
-기능
+사용자가 `새 세션 시작`을 누르면:
+1. 선택한 `storySetupId` 읽음
+2. 입력된 Gemini key/model을 함께 읽음
+3. `POST /game/start`
+4. 응답 narrative/state/choices를 초기 화면에 렌더링
+5. `turn 0` 노드를 그래프에 추가
 
-* 사용자 행동 입력
-* Enter 입력 전송
-* loading 상태 표시
+## 6. Turn Flow
 
-예시
+플레이어는 두 방식으로 턴을 보낼 수 있다.
+- 자유 입력
+- choice 버튼 클릭
 
-```
-> 문을 열고 방 안을 조사한다
-```
+두 경우 모두 최종적으로 `POST /game/action`으로 전송된다.
 
-현재 구현 추가 사항
+응답이 오면 프론트는:
+- story log에 player / assistant 메시지 추가
+- choice 버튼 갱신
+- state panel 갱신
+- graph에 새 turn node 추가
+- detail panel 갱신
 
-* 헤더에 Gemini API Key 입력 필드가 존재한다.
-* 헤더에 story setup selector가 존재한다.
-* 앱 로드 시 `GET /story-setups`로 preset 3개를 가져온다.
-* 새 세션 시작 시 API 키를 `POST /game/start`로 전달한다.
-* 새 세션 시작 시 선택한 `storySetupId`도 함께 전달한다.
-* 입력한 키는 브라우저 `localStorage`에 저장된다.
-* 선택한 story setup도 `localStorage`에 저장된다.
-* 입력 또는 choice 선택이 끝날 때마다 그래프에 새 turn node가 추가된다.
+## 7. State Panel
 
----
+현재 `main`의 상태 패널은 compatibility state를 직접 표시한다.
 
-## StoryView
+표시 항목:
+- `Turn`
+- `HP`
+- `Gold`
+- `Location`
+- `Quest Stage`
 
-스토리 텍스트 출력
+주의:
+- 현재 `Quest Stage`는 `state.quests.sunken_ruins.stage`를 사용한다.
+- 위치도 compatibility id를 그대로 출력한다.
 
-기능
+## 8. Story Graph and Debug
 
-* AI 생성 텍스트 출력
-* 이전 스토리 히스토리
-* 스크롤 관리
+Story graph:
+- `turn 0` opening부터 누적
+- 노드 클릭 시 turn detail 표시
+- message code와 location을 간단히 표시
 
----
+개발 모드:
+- `OPENNOVEL_DEBUG_UI=true`일 때 활성화
+- hover 시 `/debug/turn-log` 호출
+- intent / narrative / game 로그를 툴팁과 detail에 표시
 
-## StoryGraph
+## 9. API Usage
 
-턴 누적 흐름도 출력
+현재 프론트가 호출하는 주요 API:
 
-기능
+- `GET /health`
+- `GET /story-setups`
+- `POST /game/start`
+- `POST /game/action`
+- `GET /game/state`
 
-* `turn 0` opening 노드 생성
-* 이후 `/game/action` 응답마다 새 노드 누적
-* 현재 턴 강조 표시
-* 노드 클릭 시 detail 패널 갱신
-* 개발 모드에서 hover debug 조회
+개발 모드에서 추가:
+- `GET /debug/turn-log`
 
----
-
-## GameStatePanel
-
-게임 상태 표시
-
-```
-HP: 100
-Location: Castle
-Inventory:
-- Sword
-- Potion
-```
-
----
-
-# 7. 상태 관리
-
-현재 frontend는 프레임워크 store 없이 브라우저 메모리와 `localStorage`를 함께 사용한다.
-
-주요 클라이언트 상태
-
-* `sessionId`
-* `turnHistory`
-* `selectedTurnId`
-* `debugUiEnabled`
-* Gemini API 키 입력값
-* `storySetups`
-* `selectedStorySetupId`
-
-저장 방식
-
-* `sessionId`는 `localStorage`에 저장된다.
-* Gemini API 키도 `localStorage`에 저장된다.
-* 선택한 `storySetupId`도 `localStorage`에 저장된다.
-* 새로고침 시 `GET /game/state`로 현재 상태 패널은 복원되지만, 전체 스토리 로그는 다시 구성하지 않는다.
-
----
-
-# 8. API 통신
-
-Game API
-
-```
-GET  /story-setups
-POST /game/start
-POST /game/action
-GET  /game/state
-```
-
-현재 구현 세부
-
-### `POST /game/start`
-
-요청 body는 비어 있을 수도 있고, 다음 필드를 포함할 수도 있다.
+### `/game/start` 요청 예시
 
 ```json
 {
@@ -212,13 +157,11 @@ GET  /game/state
 }
 ```
 
-### `POST /game/action`
-
-현재 frontend는 자유 입력과 choice 버튼 둘 다 같은 API에 전달한다.
+### `/game/action` 요청 예시
 
 ```json
 {
-  "sessionId": "...",
+  "sessionId": "session-...",
   "inputText": "주변을 조사한다"
 }
 ```
@@ -227,179 +170,18 @@ GET  /game/state
 
 ```json
 {
-  "sessionId": "...",
+  "sessionId": "session-...",
   "choiceText": "회랑으로 이동한다"
 }
 ```
 
----
+## 10. Current Limitations
 
-## Start Game
+현재 `main`의 한계:
+- server-driven HTML/JS 구조
+- 전체 story log는 새로고침 시 완전 복원되지 않음
+- debug UI는 hover 중심의 단순 형태
+- streaming / partial response 없음
+- mobile 최적화는 제한적
 
-```
-POST /game/start
-```
-
-Response
-
-```
-{
-  sessionId,
-  narrative,
-  choices,
-  state
-}
-```
-
----
-
-## Player Action
-
-```
-POST /game/action
-```
-
-Request
-
-```
-{
-  sessionId,
-  inputText: "open the door"
-}
-```
-
-Response
-
-```
-{
-  narrative,
-  choices,
-  engineResult,
-  state
-}
-```
-
----
-
-# 9. 게임 흐름
-
-전체 흐름
-
-```
-1 User enters action
-2 Frontend sends API request
-3 Agent game runtime updates state
-4 Agent narrator generates story
-5 Response returned
-6 UI updates
-```
-
-현재 frontend 동작
-
-* 최초 로드 시 `localStorage`의 `sessionId`를 확인한다.
-* 최초 로드 시 `GET /health`로 debug UI 사용 가능 여부를 먼저 확인한다.
-* 세션이 있으면 `GET /game/state`로 상태를 복원한다.
-* 세션이 없으면 새 세션을 시작한다.
-* 선택지 버튼 또는 직접 입력을 `POST /game/action`으로 전송한다.
-* 응답의 `narrative`, `choices`, `state`로 화면을 갱신한다.
-* turn 응답은 동시에 그래프 노드로 누적된다.
-* 개발 모드에서는 노드 hover 시 `GET /debug/turn-log`를 조회한다.
-
-주의
-
-* 현재 message history 전체를 서버에서 복구하지는 않는다.
-* 새로고침 시 상태 패널은 복원되지만, 전체 스토리 로그는 재생성되지 않는다.
-
----
-
-# 10. UX 원칙
-
-1. **채팅 중심 인터페이스**
-2. **텍스트 가독성 최우선**
-3. **스토리 몰입 유지**
-4. **빠른 입력 가능**
-
----
-
-# 11. 향후 확장
-
-추후 기능
-
-### Streaming Response
-
-LLM streaming 출력
-
-```
-AI typing...
-```
-
----
-
-### 선택지 기반 플레이
-
-```
-1. 문을 연다
-2. 창문을 조사한다
-3. 뒤로 돌아간다
-```
-
----
-
-### 캐릭터 UI
-
-```
-Portrait
-Emotion
-Dialogue
-```
-
----
-
-### 세이브 시스템
-
-```
-Save Slot
-Load Game
-```
-
----
-
-# 12. Codex 작업 규칙
-
-AI agent (Codex)가 작업할 때 규칙
-
-* TypeScript strict mode 사용
-* 모든 컴포넌트는 함수형
-* 상태는 store로 관리
-* API 로직은 services 폴더에 작성
-* UI 로직과 API 로직 분리
-
----
-
-# 13. MVP 개발 순서
-
-1️⃣ Chat UI 구현
-2️⃣ API 연결
-3️⃣ 게임 상태 표시
-4️⃣ 세션 관리
-5️⃣ 스토리 렌더링 개선
-
----
-
-# 14. 개발 우선순위
-
-Priority 1
-
-* Chat UI
-* Input
-* API call
-
-Priority 2
-
-* Game state panel
-* Session persistence
-
-Priority 3
-
-* Streaming response
-* UI polish
+즉 현재 frontend는 `StoryAgent` 기반 single-server UI를 빠르게 확인하고 디버그하기 위한 MVP 구현이다.

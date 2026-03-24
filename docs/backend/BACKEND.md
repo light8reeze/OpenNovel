@@ -1,336 +1,166 @@
-OpenNovel Backend — Codex Development Guide
+OpenNovel Backend Guide
 
-## 1. Project Overview
+## 1. Overview
 
-이 프로젝트는 **OpenNovel**, AI 기반 인터랙티브 소설 플레이 서비스이다.
+현재 `main`의 공식 backend는 Python `agent` 서비스다.  
+플레이어 입력은 `GameSessionService`를 거쳐 `StoryAgent`로 전달되고, `StoryAgent`가 다음 narrative, choices, compatibility state를 생성한다.
 
-플레이어는 채팅 인터페이스를 통해 소설 속 주인공이 되어 행동을 선택하며,
-LLM은 플레이어 입력 보조 해석과 장면 서술 역할을 수행한다.
-서버 startup 시에는 세션 시작용 story setup preset 3개를 agent가 생성하려 시도하고, 실패하면 fallback preset을 사용한다.
+핵심 흐름:
 
-### Core Concept
-
-```
-Player Input → Game Engine → World State Update → LLM Narrative → Response
-```
-
-핵심 구성 요소
-
-1. **Game Engine**
-
-   * 세계 상태 관리
-   * 행동 결과 계산
-   * 룰 기반 로직
-
-2. **LLM Agents**
-
-   * `IntenderAgent`: 플레이어 자연어 입력을 action candidate로 정규화
-   * `NarratorAgent`: 현재 상태 기반 장면 서술과 선택지 생성
-   * `StorySetupAgent`: 서버 시작 시 preset 3개 생성
-
-3. **Session Manager**
-
-   * 플레이어 진행 상태 관리
-   * in-memory 세션 저장 / 복원
-   * 선택된 `storySetupId`를 세션 단위로 유지
-
----
-# 2. Backend Architecture
-
-## High-Level Architecture
-
-```
-                +------------------+
-                |   Frontend UI    |
-                |  (Chat Interface)|
-                +--------+---------+
-                         |
-                       REST
-                         |
-+--------------------------------------------------+
-|              Agent FastAPI Service               |
-|                                                  |
-|  +------------------+   +----------------------+ |
-|  | Game Session     |-->| Deterministic Engine | |
-|  | Service          |   | State Transition     | |
-|  +------------------+   +----------------------+ |
-|           |                         |            |
-|           |                         v            |
-|           |              +--------------------+ |
-|           |              | IntenderAgent      | |
-|           |              | NarratorAgent      | |
-|           |              +--------------------+ |
-|           |                         |            |
-|           v                         v            |
-|      In-memory store         Prompt / Retrieval |
-|      Static frontend         LLM adapters       |
-+--------------------------------------------------+
-```
-
-## 현재 구현된 구조
-
-현재 공식 backend 런타임은 Python `agent` 서비스다.
-
-```
-agent/
-  app/
-    api/
-    agents/
-    game/
-    prompts/
-    retrieval/
-    schemas/
-    services/
-  tests/
-```
-
-현재 `agent/app`의 주요 책임은 다음과 같다.
-
-* `game/models.py`: `GameState`, `Event`, `TurnResult`, API request/response 모델 정의
-* `game/engine.py`: 입력 해석, 허용 액션 계산, 이벤트 생성, 상태 전이, 선택지 계산
-* `game/service.py`: 세션 오케스트레이션, in-memory 저장, `/game/*` 흐름 제어
-* `agents/story_setup.py`: startup preset 생성과 fallback preset 제공
-* `agents/intender.py`: 플레이어 입력을 action candidate로 정규화
-* `agents/narrator.py`: engine result를 narrative JSON으로 생성
-* `services/fallback_renderer.py`: 템플릿 narrative 폴백
-* `services/file_logger.py`: JSONL 로그와 turn bundle 로더
-* `api/routes.py`: FastAPI 엔드포인트, 정적 frontend 서빙, debug turn log API, `/story-setups`
-
-클래스 기준 상세 아키텍처는 `docs/backend/AGENT_ARCHITECTURE.md`를 참고한다.
-
----
-
-# 3. Technology Stack
-
-현재 구현 기준
-
-* Language: `Python`
-* API: `FastAPI` 기반 REST
-* Session store: in-memory
-* Retrieval store: `Chroma`
-* Static frontend serving: same FastAPI process
-* LLM providers: `mock`, `openai_compatible`, `gemini`
-
-아직 미구현
-
-* 영속 DB
-* WebSocket / streaming
-* Redis cache
-
-# 4. Project Structure
-
-현재 구현된 실제 구조는 상단의 `현재 구현된 구조` 섹션을 따른다. 문서상의 추상 구조보다 현재 `agent/app` 패키지 구조가 실제 동작 기준이다.
-
----
-
-# 5. Core Data Model
-
-## Session
-
-```
-Session
-{
-  session_id
-  player_id
-  story_id
-  current_state
-  created_at
-}
-```
-
----
-
-## World State
-
-```
-WorldState
-{
-  location
-  npc_states
-  event_flags
-  environment
-}
-```
-
----
-
-## Character State
-
-```
-Character
-{
-  hp
-  inventory
-  abilities
-  status_effects
-}
-```
-
----
-
-## Player Action
-
-```
-Action
-{
-  action_type
-  parameters
-}
-```
-
-예시
-
-```
-"attack goblin"
-"open door"
-"talk npc"
-```
-
----
-
-# 6. Game Engine
-
-Game Engine은 **LLM과 독립적인 deterministic logic layer**이다.
-
-목적
-
-```
-LLM hallucination 방지
-게임 룰 안정성
-상태 일관성 유지
-```
-
----
-
-## State Transition Flow
-
-```
+```text
 Player Input
-     |
-Intent Validation / Heuristic Parse
-     |
-Rule Engine
-     |
-State Update
-     |
-Narrative Generation
+  -> GameSessionService
+  -> StoryAgent
+  -> TurnResult
+  -> Session Update
+  -> JSON Response
 ```
 
-현재 구현에서는 `agent.app.game.engine`과 `agent.app.game.service`가 다음을 수행한다.
+서버 startup 시에는 `StorySetupAgent`가 세션 시작용 preset 3개를 생성하려 시도하고, 실패하면 fallback preset을 사용한다.
 
-* `IntenderAgent`로 플레이어 입력을 action candidate로 정규화
-* validation 실패 시 heuristic parser로 fallback
-* `Event` 목록 생성
-* `apply_events`로 `next_state` 계산
-* `EngineResult` 반환
+## 2. Runtime Architecture
 
-즉 LLM이 실패해도 deterministic loop는 계속 동작한다.
+현재 `agent/app`의 실제 책임:
 
----
+- [agent/app/runtime.py](/Users/light8reeze/Documents/Projects/OpenNovel/agent/app/runtime.py)
+  - runtime 조립
+  - story setup preset 생성
+  - Chroma / retrieval 초기화
+- [agent/app/game/service.py](/Users/light8reeze/Documents/Projects/OpenNovel/agent/app/game/service.py)
+  - 세션 시작, 턴 진행, 상태 조회
+  - in-memory 세션 저장
+- [agent/app/agents/story.py](/Users/light8reeze/Documents/Projects/OpenNovel/agent/app/agents/story.py)
+  - narrative, choices, state, engineResult 생성
+- [agent/app/agents/story_setup.py](/Users/light8reeze/Documents/Projects/OpenNovel/agent/app/agents/story_setup.py)
+  - startup preset 생성
+- [agent/app/agents/intender.py](/Users/light8reeze/Documents/Projects/OpenNovel/agent/app/agents/intender.py)
+  - direct `/intent/validate` compatibility 경로
+- [agent/app/agents/narrator.py](/Users/light8reeze/Documents/Projects/OpenNovel/agent/app/agents/narrator.py)
+  - direct `/narrative/*` compatibility 경로
+- [agent/app/services/file_logger.py](/Users/light8reeze/Documents/Projects/OpenNovel/agent/app/services/file_logger.py)
+  - JSONL 로그와 debug turn bundle 집계
 
-# 7. LLM Narrative Engine
+추상 구조:
 
-LLM은 **스토리 생성 전용 역할**만 수행한다.
-
-LLM은 다음 정보를 입력받는다
-
-```
-World State
-Character State
-Player Action
-Recent Story Context
-```
-
----
-
-## Prompt Template
-
-Example
-
-```
-You are a game master narrating an interactive story.
-
-World State:
-{world_state}
-
-Player State:
-{character_state}
-
-Player Action:
-{action}
-
-Narrate the outcome in immersive storytelling style.
+```text
+Frontend
+  -> FastAPI routes
+  -> AgentRuntime
+  -> GameSessionService
+  -> StoryAgent
+  -> LLM / fallback
 ```
 
-## 현재 구현 상태
+## 3. Session Model
 
-현재 narrative 계층은 두 가지 경로를 가진다.
+현재 세션은 메모리 기반이다.
 
-1. 기본 템플릿 narrative
-2. LLM 기반 narrative JSON 생성
+저장되는 값:
+- `session_id`
+- `state`
+- `history`
+- `choices`
+- `story_setup`
+- per-session `StoryAgent`
 
-LLM 연동 방식
+영속 저장소는 아직 없다.
 
-* `POST /game/start` 요청에서 `geminiApiKey`와 선택적 `geminiModel`을 받을 수 있다.
-* 세션이 시작될 때 API 키를 세션 narrator 설정에 저장한다.
-* 이후 turn마다 `state`와 `engineResult` 기반 prompt를 만들어 narrator를 호출한다.
-* Gemini 또는 기타 provider 응답은 반드시 JSON으로 파싱한다.
-* 호출 실패 또는 파싱 실패 시 템플릿 narrative로 폴백한다.
+## 4. State Model
 
-중요:
-
-* Gemini는 `narrative`와 `choices`만 생성한다.
-* 상태 전이, 퀘스트 진행, 판정은 전부 `engine`이 수행한다.
-
----
-
-# 8. API Design
-
-## 현재 구현된 API
-
-현재 실제 구현 엔드포인트는 다음과 같다.
-
-### `GET /`
-
-정적 frontend shell을 반환한다.
-
-### `GET /frontend/app.js`
-
-정적 frontend 스크립트를 반환한다.
-
-### `GET /frontend/styles.css`
-
-정적 frontend 스타일시트를 반환한다.
-
-### `POST /game/start`
-
-request body (optional)
+`main` 기준 compatibility state 예시:
 
 ```json
 {
+  "meta": {
+    "turn": 0,
+    "seed": 12345
+  },
+  "player": {
+    "hp": 100,
+    "gold": 15,
+    "location_id": "ruins_entrance",
+    "inventory": {
+      "torch": 1
+    },
+    "flags": []
+  },
+  "world": {
+    "time": "night",
+    "global_flags": ["sunken_ruins_open"],
+    "alert_by_region": {
+      "ruins": 6
+    }
+  },
+  "quests": {
+    "sunken_ruins": {
+      "stage": 0
+    }
+  },
+  "relations": {
+    "npc_affinity": {
+      "caretaker": 5
+    }
+  }
+}
+```
+
+주의:
+- `main`에서는 이 state가 아직 던전 기반 compatibility 의미를 가진다.
+- `engineResult`도 실제 deterministic engine 결과가 아니라 compatibility metadata로 사용된다.
+
+## 5. API
+
+현재 공식 API:
+
+- `GET /`
+- `GET /health`
+- `GET /story-setups`
+- `POST /game/start`
+- `POST /game/action`
+- `GET /game/state`
+
+개발/호환 API:
+
+- `GET /debug/turn-log`
+- `POST /intent/validate`
+- `POST /narrative/opening`
+- `POST /narrative/turn`
+
+### `GET /story-setups`
+
+startup 시 생성된 preset 3개를 반환한다.
+
+### `POST /game/start`
+
+요청 예시:
+
+```json
+{
+  "storySetupId": "sunken_ruins",
   "geminiApiKey": "AIza...",
   "geminiModel": "gemini-2.5-flash"
 }
 ```
 
-response
+응답 예시:
 
 ```json
 {
-  "sessionId": "...",
-  "narrative": "...",
+  "sessionId": "session-...",
+  "narrative": "....",
   "choices": ["..."],
-  "state": { }
+  "state": {},
+  "storySetupId": "sunken_ruins"
 }
 ```
 
 ### `POST /game/action`
 
-request
+입력은 자유 입력과 choice 입력 둘 다 지원한다.
 
 ```json
 {
-  "sessionId": "...",
+  "sessionId": "session-...",
   "inputText": "주변을 조사한다"
 }
 ```
@@ -339,195 +169,58 @@ request
 
 ```json
 {
-  "sessionId": "...",
+  "sessionId": "session-...",
   "choiceText": "회랑으로 이동한다"
 }
 ```
 
-response
+### `GET /game/state`
 
-```json
-{
-  "narrative": "...",
-  "choices": ["..."],
-  "engineResult": { },
-  "state": { }
-}
-```
+현재 세션의 최신 compatibility state를 반환한다.
 
-### `GET /game/state?sessionId=...`
+## 6. LLM Layers
 
-response
+현재 역할 분리:
 
-```json
-{
-  "state": { }
-}
-```
+- `StoryAgent`
+  - `/game/*`의 주 경로
+  - state와 narrative를 함께 생성
+- `IntenderAgent`
+  - direct intent validation용 compatibility layer
+- `NarratorAgent`
+  - direct narrative generation용 compatibility layer
+- `StorySetupAgent`
+  - startup preset 생성
 
-### 내부 보조 API
+지원 provider:
+- `mock`
+- `gemini`
+- `openai_compatible`
 
-다음 엔드포인트는 agent 내부 LLM 계층을 직접 검증할 때 사용한다.
+## 7. Retrieval and Logging
 
-* `GET /health`
-* `GET /debug/turn-log?sessionId=...&turn=...`
-* `POST /intent/validate`
-* `POST /narrative/opening`
-* `POST /narrative/turn`
+Retrieval:
+- Chroma 사용
+- startup 시 auto-index 가능
+- `intender`, `narrator` 두 collection 사용
 
----
+로그:
+- `log/agent/backend-requests.jsonl`
+- `log/agent/intent-results.jsonl`
+- `log/agent/narrative-results.jsonl`
+- `log/agent/game-results.jsonl`
+- `log/agent/llm-errors.jsonl`
+- `log/combined/run-*.jsonl`
 
-# 9. State Persistence
+`GET /debug/turn-log`는 이 로그를 묶어서 turn 단위 bundle로 반환한다.
 
-저장해야 하는 데이터
+## 8. Current Limitations
 
-```
-player progress
-world state
-character state
-story history
-```
+아직 없는 것:
+- SQLite / persistent DB
+- streaming response
+- memory summary pipeline
+- React/TypeScript frontend
+- rule validator 중심의 multi-agent runtime
 
-story history는 다음 목적에 사용
-
-```
-LLM context
-replay
-save/load
-```
-
----
-
-# 10. Coding Guidelines
-
-### Architecture
-
-```
-domain logic must not depend on LLM
-engine must be deterministic
-API layer must be thin
-```
-
----
-
-### Engine Rules
-
-```
-No LLM inside engine
-No DB access inside engine
-Pure logic only
-```
-
----
-
-### LLM Adapter
-
-현재 구현 provider
-
-```
-mock
-openai_compatible
-gemini
-```
-
-현재 구조는 `RoleModelSettings -> build_llm_client()` 형태로 role별 provider를 생성한다.
-
-특이 사항
-
-* `POST /game/start`에서 `geminiApiKey`, `geminiModel`을 받으면 세션 전용 narrator를 만든다.
-* narrator가 실패하면 템플릿 narrative로 fallback한다.
-* intender validation 실패 시 heuristic parser로 fallback한다.
-
----
-
-# 11. Development Commands
-
-예시
-
-```bash
-PYTHONPATH=agent agent/.venv/bin/uvicorn app.main:app --app-dir agent --host 127.0.0.1 --port 8000
-```
-
-```bash
-PYTHONPATH=agent agent/.venv/bin/pytest agent/tests
-```
-
----
-
-# 12. Testing Strategy
-
-테스트 레벨
-
-### Unit Test
-
-```
-game engine
-state transition
-rules
-```
-
----
-
-### Integration Test
-
-```
-API endpoints
-session lifecycle
-```
-
----
-
-### Simulation Test
-
-```
-LLM mock
-story progression test
-```
-
----
-
-# 13. Future Architecture
-
-MVP 이후 확장
-
-```
-multi player session
-procedural world generation
-vector memory for long story
-AI NPC agents
-```
-
----
-
-# 14. Non-goals (MVP)
-
-MVP에서 제외
-
-```
-MMORPG
-complex economy system
-real-time combat
-```
-
----
-
-# 15. Design Principles
-
-핵심 철학
-
-```
-LLM handles narrative
-Engine handles logic
-State is source of truth
-```
-
----
-
-## Codex Agent Instructions
-
-When generating code:
-
-1. Do not mix engine logic with LLM logic.
-2. Follow the project directory structure.
-3. Prefer simple deterministic systems.
-4. Avoid unnecessary abstractions.
+즉 `main`의 현재 backend는 `StoryAgent` 중심 single-runtime 구조다.
