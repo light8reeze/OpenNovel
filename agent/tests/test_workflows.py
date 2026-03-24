@@ -14,6 +14,9 @@ def test_health() -> None:
     assert payload["storyAgent"]["provider"]
     assert payload["intender"]["provider"]
     assert payload["narrator"]["provider"]
+    assert payload["worldBuilder"]["provider"]
+    assert payload["stateManager"]["provider"]
+    assert payload["validator"]["type"] == "deterministic"
     assert payload["vectorStore"]["provider"] == "chroma"
     assert payload["storySetups"]["count"] == 3
     assert payload["debugUiEnabled"] is True
@@ -23,20 +26,20 @@ def test_intent_validation_returns_action() -> None:
     response = client.post(
         "/intent/validate",
         json={
-            "player_input": "회랑으로 이동한다",
+            "player_input": "안개 골목으로 이동한다",
             "allowed_actions": ["MOVE", "INVESTIGATE"],
             "state_summary": {
                 "turn": 0,
-                "location_id": "ruins_entrance",
+                "location_id": "harbor_dock",
                 "hp": 100,
                 "gold": 15,
-                "sunken_ruins_stage": 0,
+                "story_arc_stage": 0,
                 "player_flags": [],
             },
             "scene_context": {
-                "location_name": "Sunken Ruins Entrance",
-                "npcs_in_scene": ["caretaker"],
-                "visible_targets": ["hall", "caretaker"],
+                "location_name": "젖은 부두",
+                "npcs_in_scene": ["항구 경비"],
+                "visible_targets": ["안개 골목", "항구 경비"],
             },
         },
     )
@@ -52,29 +55,29 @@ def test_turn_narrative_returns_allowed_choices() -> None:
         json={
             "state_summary": {
                 "turn": 1,
-                "location_id": "collapsed_hall",
+                "location_id": "fog_alley",
                 "hp": 100,
                 "gold": 15,
-                "sunken_ruins_stage": 2,
+                "story_arc_stage": 2,
                 "player_flags": [],
             },
             "scene_context": {
-                "location_name": "Collapsed Hall",
+                "location_name": "안개 골목",
                 "npcs_in_scene": [],
-                "visible_targets": ["trap_room", "ruins_entrance"],
+                "visible_targets": ["밀수 창고", "젖은 부두"],
             },
             "engine_result": {
                 "success": True,
-                "message_code": "NOTHING_FOUND",
+                "message_code": "INVESTIGATE_PROGRESS",
                 "location_changed": False,
-                "quest_stage_changed": False,
+                "quest_stage_changed": True,
                 "ending_reached": None,
-                "details": ["empty_search"],
+                "details": ["found_smuggling_mark"],
             },
             "allowed_choices": [
                 "주변을 조사한다",
-                "함정방으로 이동한다",
-                "입구로 돌아간다",
+                "밀수 창고로 이동한다",
+                "젖은 부두로 돌아간다",
             ],
         },
     )

@@ -1,15 +1,19 @@
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from itertools import count
 from threading import Lock
 from time import time_ns
 
-from app.agents.story import StoryAgent
+from app.agents.intender import IntenderAgent
+from app.agents.narrator import NarratorAgent
+from app.agents.state_manager import StoryStateManagerAgent
+from app.agents.world_builder import WorldBuilderAgent
 from app.config import RoleModelSettings
 from app.game.models import (
     ActionRequest,
     ActionResponse,
+    ChoicesResponse,
     ContentBundle,
     GameState,
     StartOptions,
@@ -18,10 +22,20 @@ from app.game.models import (
     TurnResult,
     initial_state,
 )
+from app.schemas.common import SceneContext
+from app.schemas.intent import IntentValidationRequest
+from app.schemas.multi_agent import ValidationResult, WorldBlueprint
+from app.schemas.narrative import NarrativeRequest
 from app.schemas.story import StoryMessage
 from app.schemas.story_setup import StorySetup
-from app.services.file_logger import log_game_result, log_intent_result, log_narrative_result
+from app.services.file_logger import (
+    log_game_result,
+    log_intent_result,
+    log_narrative_result,
+    log_stage_result,
+)
 from app.services.llm_client import build_llm_client
+from app.services.validator import RuleValidator
 
 
 class SessionNotFoundError(KeyError):
@@ -32,34 +46,56 @@ class InvalidActionRequestError(ValueError):
     pass
 
 
+@dataclass
+class SessionAgents:
+    intender: IntenderAgent
+    narrator: NarratorAgent
+    world_builder: WorldBuilderAgent
+    state_manager: StoryStateManagerAgent
+
+
 class SessionRecord:
     def __init__(
         self,
         state: GameState,
-        story_agent: StoryAgent,
+        agents: SessionAgents,
         history: list[StoryMessage],
         choices: list[str],
         story_setup: StorySetup,
+        world_blueprint: WorldBlueprint,
+        discovery_log: list[str],
     ):
         self.state = state
-        self.story_agent = story_agent
+        self.agents = agents
         self.history = history
         self.choices = choices
         self.story_setup = story_setup
+        self.world_blueprint = world_blueprint
+        self.discovery_log = discovery_log
 
 
 class GameSessionService:
     def __init__(
         self,
         content: ContentBundle,
-        default_story_agent: StoryAgent,
-        story_agent_settings: RoleModelSettings,
+        default_intender: IntenderAgent,
+        default_narrator: NarratorAgent,
+        default_world_builder: WorldBuilderAgent,
+        default_state_manager: StoryStateManagerAgent,
+        agent_settings: RoleModelSettings,
+        validator: RuleValidator,
         story_setups: list[StorySetup],
         story_setup_source: str,
     ):
         self.content = content
-        self.default_story_agent = default_story_agent
-        self.story_agent_settings = story_agent_settings
+        self.default_agents = SessionAgents(
+            intender=default_intender,
+            narrator=default_narrator,
+            world_builder=default_world_builder,
+            state_manager=default_state_manager,
+        )
+        self.agent_settings = agent_settings
+        self.validator = validator
         self.story_setups = list(story_setups)
         self.story_setup_source = story_setup_source
         self.sessions: dict[str, SessionRecord] = {}
@@ -69,29 +105,63 @@ class GameSessionService:
     def start_game(self, options: StartOptions) -> StartResponse:
         session_id = f"session-{time_ns()}-{next(self.counter)}"
         state = initial_state()
-        story_agent = self._build_session_story_agent(options)
+        agents = self._build_session_agents(options)
         story_setup = self._select_story_setup(options.story_setup_id)
-        turn = story_agent.start(state, story_setup)
-        history = [StoryMessage(role="assistant", content=turn.narrative)]
+        world_build = agents.world_builder.build(story_setup)
+        initial_validation = self.validator.initialize_world(world_build.blueprint)
+        opening_request = NarrativeRequest(
+            state_summary=initial_validation.state.summary(),
+            scene_context=self._scene_context(initial_validation.state, world_build.blueprint),
+            engine_result=initial_validation.engine_result,
+            allowed_choices=initial_validation.allowed_choices,
+            scene_summary=initial_validation.scene_summary,
+            discovery_log=initial_validation.discovery_log,
+            world_title=world_build.blueprint.title,
+            world_summary=world_build.blueprint.world_summary,
+            world_tone=world_build.blueprint.tone,
+            player_goal=world_build.blueprint.player_goal,
+            opening_hook=world_build.blueprint.opening_hook,
+        )
+        opening = agents.narrator.render_opening(opening_request)
+        history = [StoryMessage(role="assistant", content=opening.narrative)]
         with self.lock:
             self.sessions[session_id] = SessionRecord(
-                state=turn.state,
-                story_agent=story_agent,
+                state=initial_validation.state,
+                agents=agents,
                 history=history,
-                choices=turn.choices,
+                choices=opening.choices,
                 story_setup=story_setup,
+                world_blueprint=world_build.blueprint,
+                discovery_log=list(initial_validation.discovery_log),
             )
         response = StartResponse(
             sessionId=session_id,
-            narrative=turn.narrative,
-            choices=turn.choices,
-            state=turn.state,
+            narrative=opening.narrative,
+            choices=[],
+            state=initial_validation.state,
             storySetupId=story_setup.id,
+        )
+        log_stage_result(
+            "world_build",
+            "/game/start",
+            {"storySetupId": story_setup.id},
+            world_build.model_dump(mode="json"),
+            context={"sessionId": session_id, "turn": 0},
+        )
+        log_stage_result(
+            "validation",
+            "/game/start",
+            {
+                "storySetupId": story_setup.id,
+                "worldBlueprintId": world_build.blueprint.id,
+            },
+            initial_validation.model_dump(mode="json"),
+            context={"sessionId": session_id, "turn": 0},
         )
         log_narrative_result(
             "/game/start",
             {"mode": "opening", "storySetupId": story_setup.id},
-            turn.model_dump(mode="json", by_alias=True),
+            opening.model_dump(mode="json", by_alias=True),
             context={"sessionId": session_id, "turn": 0},
         )
         log_game_result(
@@ -114,54 +184,102 @@ class GameSessionService:
             if session is None:
                 raise SessionNotFoundError(payload.session_id)
             state = session.state
-            story_agent = session.story_agent
+            agents = session.agents
             history = list(session.history)
             story_setup = session.story_setup
+            world_blueprint = session.world_blueprint
+            discovery_log = list(session.discovery_log)
+            current_choices = list(session.choices)
         history.append(StoryMessage(role="player", content=input_text))
-        turn = story_agent.advance(state, history, input_text, story_setup)
-        history.append(StoryMessage(role="assistant", content=turn.narrative))
+        intent_request = IntentValidationRequest(
+            player_input=input_text,
+            allowed_actions=self._allowed_actions_for_state(state, world_blueprint),
+            state_summary=state.summary(),
+            scene_context=self._scene_context(state, world_blueprint),
+        )
+        intent = agents.intender.handle(intent_request)
+        proposal = agents.state_manager.propose(state, world_blueprint, discovery_log, history, intent.action)
+        validation = self.validator.validate_transition(
+            state=state,
+            world_blueprint=world_blueprint,
+            discovery_log=discovery_log,
+            intent=intent.action,
+            proposal_summary=proposal.scene_summary,
+            proposal_patch=proposal.state_patch,
+            proposal_choices=proposal.choice_candidates,
+            proposed_facts=proposal.discovered_facts,
+            risk_tags=proposal.risk_tags,
+        )
+        narrative_request = NarrativeRequest(
+            state_summary=validation.state.summary(),
+            scene_context=self._scene_context(validation.state, world_blueprint),
+            engine_result=validation.engine_result,
+            allowed_choices=validation.allowed_choices,
+            scene_summary=validation.scene_summary,
+            discovery_log=validation.discovery_log,
+            world_title=world_blueprint.title,
+            world_summary=world_blueprint.world_summary,
+            world_tone=world_blueprint.tone,
+            player_goal=world_blueprint.player_goal,
+            opening_hook=world_blueprint.opening_hook,
+        )
+        narrative = agents.narrator.render_turn(narrative_request)
+        history.append(StoryMessage(role="assistant", content=narrative.narrative))
         with self.lock:
             self.sessions[payload.session_id] = SessionRecord(
-                state=turn.state,
-                story_agent=story_agent,
+                state=validation.state,
+                agents=agents,
                 history=history,
-                choices=turn.choices,
+                choices=narrative.choices,
                 story_setup=story_setup,
+                world_blueprint=world_blueprint,
+                discovery_log=validation.discovery_log,
             )
         response = ActionResponse(
-            narrative=turn.narrative,
-            choices=turn.choices,
-            engineResult=turn.engine_result,
-            state=turn.state,
+            narrative=narrative.narrative,
+            choices=[],
+            engineResult=validation.engine_result,
+            state=validation.state,
             storySetupId=story_setup.id,
         )
-        if turn.action is not None:
-            log_intent_result(
-                "/game/action",
-                {"player_input": input_text, "storySetupId": story_setup.id},
-                {
-                    "action": turn.action.model_dump(mode="json"),
-                    "confidence": 1.0,
-                    "validation_flags": [],
-                    "source": turn.source,
-                    "provider": turn.provider,
-                    "model": turn.model,
-                    "retrieval_used": turn.retrieval_used,
-                    "retrieved_document_ids": turn.retrieved_document_ids,
-                },
-                context={"sessionId": payload.session_id, "turn": turn.state.meta.turn},
-            )
+        log_intent_result(
+            "/game/action",
+            {"player_input": input_text, "storySetupId": story_setup.id, "currentChoices": current_choices},
+            intent.model_dump(mode="json"),
+            context={"sessionId": payload.session_id, "turn": validation.state.meta.turn},
+        )
+        log_stage_result(
+            "state_proposal",
+            "/game/action",
+            {
+                "player_input": input_text,
+                "storySetupId": story_setup.id,
+                "worldBlueprintId": world_blueprint.id,
+            },
+            proposal.model_dump(mode="json"),
+            context={"sessionId": payload.session_id, "turn": validation.state.meta.turn},
+        )
+        log_stage_result(
+            "validation",
+            "/game/action",
+            {
+                "player_input": input_text,
+                "intent": intent.action.model_dump(mode="json"),
+            },
+            validation.model_dump(mode="json"),
+            context={"sessionId": payload.session_id, "turn": validation.state.meta.turn},
+        )
         log_narrative_result(
             "/game/action",
             {"player_input": input_text, "history_length": len(history), "storySetupId": story_setup.id},
-            turn.model_dump(mode="json", by_alias=True),
-            context={"sessionId": payload.session_id, "turn": turn.state.meta.turn},
+            narrative.model_dump(mode="json", by_alias=True),
+            context={"sessionId": payload.session_id, "turn": validation.state.meta.turn},
         )
         log_game_result(
             "/game/action",
             payload.model_dump(mode="json", by_alias=True),
             response.model_dump(mode="json", by_alias=True),
-            context={"sessionId": payload.session_id, "turn": turn.state.meta.turn},
+            context={"sessionId": payload.session_id, "turn": validation.state.meta.turn},
         )
         return response
 
@@ -174,6 +292,19 @@ class GameSessionService:
             story_setup_id = session.story_setup.id
         response = StateResponse(state=state, storySetupId=story_setup_id)
         log_game_result("/game/state", {"sessionId": session_id}, response.model_dump(mode="json"))
+        return response
+
+    def get_choices(self, session_id: str) -> ChoicesResponse:
+        with self.lock:
+            session = self.sessions.get(session_id)
+            if session is None:
+                raise SessionNotFoundError(session_id)
+            response = ChoicesResponse(
+                sessionId=session_id,
+                choices=list(session.choices),
+                storySetupId=session.story_setup.id,
+            )
+        log_game_result("/game/choices", {"sessionId": session_id}, response.model_dump(mode="json", by_alias=True))
         return response
 
     def demo_script(self) -> list[TurnResult]:
@@ -214,22 +345,24 @@ class GameSessionService:
             return payload.choice_text
         raise InvalidActionRequestError("one of inputText or choiceText is required")
 
-    def _build_session_story_agent(self, options: StartOptions) -> StoryAgent:
+    def _build_session_agents(self, options: StartOptions) -> SessionAgents:
         api_key = (options.gemini_api_key or "").strip()
         if not api_key:
-            return self.default_story_agent
+            return self.default_agents
         model = (options.gemini_model or "").strip() or "gemini-2.5-flash"
         settings = replace(
-            self.story_agent_settings,
+            self.agent_settings,
             provider="gemini",
             model=model,
             api_key=api_key,
-            base_url=self.story_agent_settings.base_url,
+            base_url=self.agent_settings.base_url,
         )
-        return StoryAgent(
-            settings=settings,
-            llm_client=build_llm_client(settings),
-            retrieval=self.default_story_agent.retrieval,
+        llm_client = build_llm_client(settings)
+        return SessionAgents(
+            intender=IntenderAgent(settings=settings, llm_client=llm_client, retrieval=self.default_agents.intender.retrieval),
+            narrator=NarratorAgent(settings=settings, llm_client=llm_client, retrieval=self.default_agents.narrator.retrieval),
+            world_builder=WorldBuilderAgent(settings=settings, llm_client=llm_client),
+            state_manager=StoryStateManagerAgent(settings=settings, llm_client=llm_client),
         )
 
     def available_story_setups(self) -> tuple[list[StorySetup], str]:
@@ -253,3 +386,83 @@ class GameSessionService:
             ending_reached=None,
             details=["story_agent_opening"],
         )
+
+    def _scene_context(self, state: GameState, world_blueprint: WorldBlueprint) -> SceneContext:
+        current_location = self._world_location(world_blueprint, state.player.location_id)
+        visible_targets = []
+        if current_location:
+            visible_targets.extend(self._world_location_name(target_id, world_blueprint) for target_id in current_location.connections[:3])
+        visible_targets.extend(npc.label for npc in self._current_npcs(world_blueprint, state.player.location_id)[:2])
+        visible_targets.append("횃불")
+        location_name = self._world_location_name(state.player.location_id, world_blueprint)
+        npcs = [npc.label for npc in self._current_npcs(world_blueprint, state.player.location_id)]
+        return SceneContext(
+            location_name=location_name,
+            npcs_in_scene=npcs,
+            visible_targets=[target for target in visible_targets if target],
+        )
+
+    def _world_location_name(self, location_id: str, world_blueprint: WorldBlueprint) -> str:
+        location = self._world_location(world_blueprint, location_id)
+        return location.label if location else self.content.location_name(location_id)
+
+    def _primary_npc_label(self, world_blueprint: WorldBlueprint) -> str:
+        if world_blueprint.npcs:
+            return world_blueprint.npcs[0].label
+        return "안내자"
+
+    def _allowed_actions_for_state(self, state: GameState, world_blueprint: WorldBlueprint):
+        from app.schemas.common import ActionType
+
+        actions = [ActionType.MOVE, ActionType.INVESTIGATE, ActionType.REST, ActionType.USE_ITEM, ActionType.FLEE]
+        if self._current_npcs(world_blueprint, state.player.location_id):
+            actions.insert(1, ActionType.TALK)
+        return actions
+
+    def _display_npc_label(self, value: str) -> str:
+        if not value:
+            return ""
+        if any("\uac00" <= char <= "\ud7a3" for char in value):
+            return value
+        mapping = {
+            "caretaker": "관리인",
+            "village_chief": "촌장",
+            "chief": "촌장",
+            "shaman": "무당",
+            "old_miner": "늙은 광부",
+            "grieving_mother": "상복 입은 어머니",
+            "court_lady": "상궁",
+            "royal_guard": "수문장",
+            "investigator": "감찰관",
+            "smuggler": "밀수업자",
+            "outpost_commander": "주둔지 대장",
+            "scout": "정찰병",
+        }
+        return mapping.get(value.lower(), "주요 인물")
+
+    def _display_location_label(self, value: str, default: str) -> str:
+        if not value:
+            return default
+        if any("\uac00" <= char <= "\ud7a3" for char in value):
+            return value
+        mapping = {
+            "ruins_entrance": "입구",
+            "entrance": "입구",
+            "village_center": "마을 중심부",
+            "shaman_hut": "무당의 오두막",
+            "old_mine": "폐광 입구",
+            "forgotten_shrine": "잊힌 성소",
+            "collapsed_hall": "회랑",
+            "hall": "회랑",
+            "trap_chamber": "함정방",
+            "trap_room": "함정방",
+            "buried_sanctum": "지하 성소",
+            "sanctum": "지하 성소",
+        }
+        return mapping.get(value.lower(), default)
+
+    def _world_location(self, world_blueprint: WorldBlueprint, location_id: str):
+        return next((location for location in world_blueprint.locations if location.id == location_id), None)
+
+    def _current_npcs(self, world_blueprint: WorldBlueprint, location_id: str):
+        return [npc for npc in world_blueprint.npcs if npc.home_location_id == location_id]

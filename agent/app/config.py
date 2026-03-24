@@ -82,7 +82,7 @@ def _load_role_settings(role: str, default_model: str) -> RoleModelSettings:
         or _optional_env("OPENAI_API_KEY")
         or _optional_env("GEMINI_API_KEY")
     )
-    timeout_seconds = float(_env(f"AGENT_{role}_TIMEOUT_SECONDS", "15"))
+    timeout_seconds = float(_env(f"AGENT_{role}_TIMEOUT_SECONDS", "180"))
     return RoleModelSettings(
         provider=provider,
         model=model,

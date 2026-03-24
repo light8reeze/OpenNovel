@@ -11,6 +11,8 @@ from app.schemas.intent import IntentValidationRequest, IntentValidationResponse
 from app.schemas.narrative import NarrativeRequest, NarrativeResponse
 from app.schemas.story_setup import StorySetupListResponse
 from app.services.file_logger import (
+    list_debug_sessions,
+    list_debug_turns,
     load_turn_log_bundle,
     log_backend_request,
     log_intent_result,
@@ -48,6 +50,22 @@ def turn_log(sessionId: str, turn: int) -> dict[str, Any]:
     if not runtime.settings.debug_ui_enabled:
         raise HTTPException(status_code=404, detail="debug ui disabled")
     return load_turn_log_bundle(sessionId, turn)
+
+
+@router.get("/debug/sessions")
+def debug_sessions(limit: int = 20) -> dict[str, Any]:
+    runtime = get_runtime()
+    if not runtime.settings.debug_ui_enabled:
+        raise HTTPException(status_code=404, detail="debug ui disabled")
+    return {"sessions": list_debug_sessions(limit=max(1, min(limit, 100)))}
+
+
+@router.get("/debug/session-turns")
+def debug_session_turns(sessionId: str) -> dict[str, Any]:
+    runtime = get_runtime()
+    if not runtime.settings.debug_ui_enabled:
+        raise HTTPException(status_code=404, detail="debug ui disabled")
+    return {"sessionId": sessionId, "turns": list_debug_turns(sessionId)}
 
 
 @router.post("/intent/validate", response_model=IntentValidationResponse)
@@ -111,6 +129,17 @@ def get_state(sessionId: str) -> Any:
     log_backend_request("/game/state", request_payload)
     try:
         response = get_runtime().game.get_state(sessionId)
+    except SessionNotFoundError as error:
+        raise HTTPException(status_code=404, detail="session not found") from error
+    return response.model_dump(mode="json", by_alias=True)
+
+
+@router.get("/game/choices")
+def get_choices(sessionId: str) -> Any:
+    request_payload = {"sessionId": sessionId}
+    log_backend_request("/game/choices", request_payload)
+    try:
+        response = get_runtime().game.get_choices(sessionId)
     except SessionNotFoundError as error:
         raise HTTPException(status_code=404, detail="session not found") from error
     return response.model_dump(mode="json", by_alias=True)

@@ -6,8 +6,10 @@ from pathlib import Path
 
 from app.agents.intender import IntenderAgent
 from app.agents.narrator import NarratorAgent
+from app.agents.state_manager import StoryStateManagerAgent
 from app.agents.story import StoryAgent
 from app.agents.story_setup import FALLBACK_STORY_SETUPS, StorySetupAgent
+from app.agents.world_builder import WorldBuilderAgent
 from app.config import Settings, load_settings
 from app.game.models import ContentBundle
 from app.game.service import GameSessionService
@@ -15,6 +17,7 @@ from app.retrieval.indexer import index_documents
 from app.retrieval.search import RetrievalService
 from app.retrieval.vector_store import ChromaVectorStore
 from app.services.llm_client import LlmError, build_llm_client
+from app.services.validator import RuleValidator
 
 
 class AgentRuntime:
@@ -23,13 +26,16 @@ class AgentRuntime:
         self.store = ChromaVectorStore(settings.vector_store, settings.embedding)
         self.retrieval = RetrievalService(self.store, settings)
         self.content = ContentBundle.load_from_disk(game_content_root())
+        self.validator = RuleValidator(self.content)
         self._story_setups, self.story_setup_source = self._generate_story_setups()
         self._intender: IntenderAgent | None = None
         self._narrator: NarratorAgent | None = None
+        self._world_builder: WorldBuilderAgent | None = None
+        self._state_manager: StoryStateManagerAgent | None = None
         self._story_agent: StoryAgent | None = None
         self._game: GameSessionService | None = None
         self._intender_error: str | None = None
-        self._narrator_error: str | None = None
+        self._narrator_error: str | None = None 
         self._story_agent_error: str | None = None
         self._game_error: str | None = None
         self.index_counts = {"intender": 0, "narrator": 0}
@@ -87,8 +93,12 @@ class AgentRuntime:
             try:
                 self._game = GameSessionService(
                     content=self.content,
-                    default_story_agent=self.story_agent,
-                    story_agent_settings=self.settings.narrator,
+                    default_intender=self.intender,
+                    default_narrator=self.narrator,
+                    default_world_builder=self.world_builder,
+                    default_state_manager=self.state_manager,
+                    agent_settings=self.settings.narrator,
+                    validator=self.validator,
                     story_setups=self._story_setups,
                     story_setup_source=self.story_setup_source,
                 )
@@ -97,6 +107,24 @@ class AgentRuntime:
                 self._game_error = str(error)
                 raise
         return self._game
+
+    @property
+    def world_builder(self) -> WorldBuilderAgent:
+        if self._world_builder is None:
+            self._world_builder = WorldBuilderAgent(
+                settings=self.settings.narrator,
+                llm_client=build_llm_client(self.settings.narrator),
+            )
+        return self._world_builder
+
+    @property
+    def state_manager(self) -> StoryStateManagerAgent:
+        if self._state_manager is None:
+            self._state_manager = StoryStateManagerAgent(
+                settings=self.settings.narrator,
+                llm_client=build_llm_client(self.settings.narrator),
+            )
+        return self._state_manager
 
     def health(self) -> dict[str, object]:
         return {
@@ -118,6 +146,17 @@ class AgentRuntime:
                 "model": self.settings.narrator.model,
                 "llmConfigured": bool(self.settings.narrator.api_key) or self.settings.narrator.provider == "mock",
                 "runtimeError": self._story_agent_error,
+            },
+            "worldBuilder": {
+                "provider": self.settings.narrator.provider,
+                "model": self.settings.narrator.model,
+            },
+            "stateManager": {
+                "provider": self.settings.narrator.provider,
+                "model": self.settings.narrator.model,
+            },
+            "validator": {
+                "type": "deterministic",
             },
             "vectorStore": {
                 "provider": self.settings.vector_store.provider,
@@ -149,7 +188,7 @@ class AgentRuntime:
             return list(FALLBACK_STORY_SETUPS), "fallback"
         generation_settings = replace(
             self.settings.narrator,
-            timeout_seconds=min(self.settings.narrator.timeout_seconds, 3.0),
+            timeout_seconds=min(self.settings.narrator.timeout_seconds, 180.0),
         )
         try:
             llm_client = build_llm_client(generation_settings)
