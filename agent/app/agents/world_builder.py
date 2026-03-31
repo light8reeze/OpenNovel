@@ -212,8 +212,14 @@ class WorldBuilderAgent:
         setup_id = story_setup.id.lower()
         if "city" in setup_id:
             return ["젖은 부두", "안개 골목", "밀수 창고", "종탑 광장"], "항구 경비"
+        if "temple" in setup_id or "shrine" in setup_id:
+            return ["낡은 대웅전", "승방 회랑", "지하 법당", "봉인된 내전"], "노승"
         if "frontier" in setup_id:
             return ["변경 초소", "먼지 협곡", "버려진 급수탑", "깨어난 망루"], "정찰병"
+        if "royal" in setup_id or "palace" in setup_id or "court" in setup_id:
+            return ["침전 앞 회랑", "비밀 서고", "어전 통로", "봉인된 내실"], "상궁"
+        if "manor" in setup_id or "estate" in setup_id:
+            return ["현관 홀", "초상화 복도", "봉인된 서재", "지하 예배실"], "집사"
         return ["폐허 입구", "무너진 회랑", "함정 석실", "깊은 성소"], "관리인"
 
     def _slugify_label(self, value: str, prefix: str = "node") -> str:

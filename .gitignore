@@ -46,3 +46,4 @@ build/
 .chroma/
 .artifacts/
 artifacts/
+.gstack/

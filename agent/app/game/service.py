@@ -108,7 +108,10 @@ class GameSessionService:
         agents = self._build_session_agents(options)
         story_setup = self._select_story_setup(options.story_setup_id)
         world_build = agents.world_builder.build(story_setup)
-        themed_blueprint = self._apply_theme_pack(world_build.blueprint, self._select_theme_pack(seed))
+        themed_blueprint = self._apply_theme_pack(
+            world_build.blueprint,
+            self._select_theme_pack(story_setup, world_build.blueprint, seed),
+        )
         themed_world_build = world_build.model_copy(update={"blueprint": themed_blueprint})
         initial_validation = self.validator.initialize_world(themed_blueprint, seed=seed)
         opening_request = NarrativeRequest(
@@ -379,9 +382,16 @@ class GameSessionService:
                     return preset
         return self.story_setups[0]
 
-    def _select_theme_pack(self, seed: int) -> ThemePack | None:
+    def _select_theme_pack(self, story_setup: StorySetup, world_blueprint: WorldBlueprint, seed: int) -> ThemePack | None:
         if not self.content.theme_packs:
             return None
+        scored = [
+            (self._theme_score(theme_pack, story_setup, world_blueprint), index, theme_pack)
+            for index, theme_pack in enumerate(self.content.theme_packs)
+        ]
+        best_score, _index, best_pack = max(scored, key=lambda item: (item[0], -item[1]))
+        if best_score > 0:
+            return best_pack
         return self.content.theme_packs[seed % len(self.content.theme_packs)]
 
     def _apply_theme_pack(self, world_blueprint: WorldBlueprint, theme_pack: ThemePack | None) -> WorldBlueprint:
@@ -394,6 +404,77 @@ class GameSessionService:
         themed.npcs = self._build_theme_npcs(world_blueprint, theme_pack)
         themed.important_npcs = [npc.label for npc in themed.npcs]
         return themed
+
+    def _theme_score(self, theme_pack: ThemePack, story_setup: StorySetup, world_blueprint: WorldBlueprint) -> int:
+        corpus = " ".join(
+            [
+                story_setup.id,
+                story_setup.title,
+                story_setup.world_summary,
+                story_setup.tone,
+                story_setup.player_goal,
+                story_setup.opening_hook,
+                world_blueprint.id,
+                world_blueprint.title,
+                world_blueprint.world_summary,
+                world_blueprint.tone,
+                world_blueprint.player_goal,
+                world_blueprint.opening_hook,
+                " ".join(location.label for location in world_blueprint.locations),
+            ]
+        ).lower()
+        keyword_groups = {
+            "cursed_cathedral": (
+                ("사찰", 4),
+                ("성당", 4),
+                ("성소", 3),
+                ("제단", 3),
+                ("사제", 3),
+                ("성물", 2),
+                ("temple", 4),
+                ("cathedral", 4),
+                ("sanctum", 3),
+                ("shrine", 3),
+                ("priest", 3),
+            ),
+            "fungal_mine": (
+                ("광산", 4),
+                ("갱도", 3),
+                ("포자", 4),
+                ("균사", 4),
+                ("광맥", 2),
+                ("mine", 4),
+                ("spore", 4),
+                ("fungal", 4),
+                ("shaft", 2),
+            ),
+            "sunken_ruins": (
+                ("폐허", 3),
+                ("유적", 4),
+                ("침수", 4),
+                ("수문", 3),
+                ("심연", 2),
+                ("젖은", 2),
+                ("ruins", 4),
+                ("sunken", 4),
+                ("flood", 3),
+                ("water", 2),
+            ),
+            "abandoned_observatory": (
+                ("천문", 4),
+                ("별", 3),
+                ("관측", 4),
+                ("기록", 2),
+                ("돔", 2),
+                ("렌즈", 2),
+                ("observatory", 4),
+                ("star", 3),
+                ("astral", 2),
+                ("archive", 2),
+                ("records", 2),
+            ),
+        }
+        return sum(weight for needle, weight in keyword_groups.get(theme_pack.id, ()) if needle in corpus)
 
     def _intent_from_choice(
         self,
