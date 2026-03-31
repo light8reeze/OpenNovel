@@ -18,13 +18,13 @@ from app.game.models import (
     GameState,
     StartOptions,
     StartResponse,
+    ThemePack,
     StateResponse,
     TurnResult,
-    initial_state,
 )
 from app.schemas.common import SceneContext
 from app.schemas.intent import IntentValidationRequest
-from app.schemas.multi_agent import ValidationResult, WorldBlueprint
+from app.schemas.multi_agent import ValidationResult, WorldBlueprint, WorldNpc
 from app.schemas.narrative import NarrativeRequest
 from app.schemas.story import StoryMessage
 from app.schemas.story_setup import StorySetup
@@ -103,25 +103,27 @@ class GameSessionService:
         self.counter = count(1)
 
     def start_game(self, options: StartOptions) -> StartResponse:
-        session_id = f"session-{time_ns()}-{next(self.counter)}"
-        state = initial_state()
+        seed = time_ns() % 2_147_483_647
+        session_id = f"session-{seed}-{next(self.counter)}"
         agents = self._build_session_agents(options)
         story_setup = self._select_story_setup(options.story_setup_id)
         world_build = agents.world_builder.build(story_setup)
-        initial_validation = self.validator.initialize_world(world_build.blueprint)
+        themed_blueprint = self._apply_theme_pack(world_build.blueprint, self._select_theme_pack(seed))
+        themed_world_build = world_build.model_copy(update={"blueprint": themed_blueprint})
+        initial_validation = self.validator.initialize_world(themed_blueprint, seed=seed)
         opening_request = NarrativeRequest(
             state_summary=initial_validation.state.summary(),
-            scene_context=self._scene_context(initial_validation.state, world_build.blueprint),
+            scene_context=self._scene_context(initial_validation.state, themed_blueprint),
             engine_result=initial_validation.engine_result,
             allowed_choices=initial_validation.allowed_choices,
             scene_summary=initial_validation.scene_summary,
             progress_kind=initial_validation.progress_kind,
             discovery_log=initial_validation.discovery_log,
-            world_title=world_build.blueprint.title,
-            world_summary=world_build.blueprint.world_summary,
-            world_tone=world_build.blueprint.tone,
-            player_goal=world_build.blueprint.player_goal,
-            opening_hook=world_build.blueprint.opening_hook,
+            world_title=themed_blueprint.title,
+            world_summary=themed_blueprint.world_summary,
+            world_tone=themed_blueprint.tone,
+            player_goal=themed_blueprint.player_goal,
+            opening_hook=themed_blueprint.opening_hook,
         )
         opening = agents.narrator.render_opening(opening_request)
         history = [StoryMessage(role="assistant", content=opening.narrative)]
@@ -132,7 +134,7 @@ class GameSessionService:
                 history=history,
                 choices=opening.choices,
                 story_setup=story_setup,
-                world_blueprint=world_build.blueprint,
+                world_blueprint=themed_blueprint,
                 discovery_log=list(initial_validation.discovery_log),
             )
         response = StartResponse(
@@ -146,7 +148,7 @@ class GameSessionService:
             "world_build",
             "/game/start",
             {"storySetupId": story_setup.id},
-            world_build.model_dump(mode="json"),
+            themed_world_build.model_dump(mode="json"),
             context={"sessionId": session_id, "turn": 0},
         )
         log_stage_result(
@@ -154,7 +156,7 @@ class GameSessionService:
             "/game/start",
             {
                 "storySetupId": story_setup.id,
-                "worldBlueprintId": world_build.blueprint.id,
+                "worldBlueprintId": themed_blueprint.id,
             },
             initial_validation.model_dump(mode="json"),
             context={"sessionId": session_id, "turn": 0},
@@ -377,6 +379,45 @@ class GameSessionService:
                     return preset
         return self.story_setups[0]
 
+    def _select_theme_pack(self, seed: int) -> ThemePack | None:
+        if not self.content.theme_packs:
+            return None
+        return self.content.theme_packs[seed % len(self.content.theme_packs)]
+
+    def _apply_theme_pack(self, world_blueprint: WorldBlueprint, theme_pack: ThemePack | None) -> WorldBlueprint:
+        if theme_pack is None:
+            return world_blueprint
+        themed = world_blueprint.model_copy(deep=True)
+        themed.theme_id = theme_pack.id
+        themed.theme_rules = list(theme_pack.rules)
+        themed.title = f"{theme_pack.title_prefix} | {world_blueprint.title}"
+        themed.world_summary = f"{theme_pack.summary_prefix} {world_blueprint.world_summary}".strip()
+        themed.tone = theme_pack.tone
+        themed.opening_hook = f"{theme_pack.opening_hook} {world_blueprint.opening_hook}".strip()
+        themed.objective_label = "던전의 핵심 대상을 원하는 방식으로 해결한다."
+        themed.npcs = self._build_theme_npcs(themed, theme_pack)
+        themed.important_npcs = [npc.label for npc in themed.npcs]
+        return themed
+
+    def _build_theme_npcs(self, world_blueprint: WorldBlueprint, theme_pack: ThemePack) -> list[WorldNpc]:
+        if not theme_pack.npc_roles:
+            return world_blueprint.npcs
+        npcs: list[WorldNpc] = []
+        last_index = max(0, len(world_blueprint.locations) - 1)
+        for role in theme_pack.npc_roles:
+            location_index = role.location_index if role.location_index >= 0 else last_index
+            location_index = min(max(location_index, 0), last_index)
+            npcs.append(
+                WorldNpc(
+                    id=role.id,
+                    label=role.label,
+                    home_location_id=world_blueprint.locations[location_index].id,
+                    role=role.role,
+                    interaction_hint=role.interaction_hint,
+                )
+            )
+        return npcs
+
     def _game_started_engine_result(self):
         from app.schemas.common import EngineResult
 
@@ -395,6 +436,7 @@ class GameSessionService:
         if current_location:
             visible_targets.extend(self._world_location_name(target_id, world_blueprint) for target_id in current_location.connections[:3])
         visible_targets.extend(npc.label for npc in self._current_npcs(world_blueprint, state.player.location_id)[:2])
+        visible_targets.extend(self._theme_visible_targets(state))
         visible_targets.append("횃불")
         location_name = self._world_location_name(state.player.location_id, world_blueprint)
         npcs = [npc.label for npc in self._current_npcs(world_blueprint, state.player.location_id)]
@@ -420,6 +462,16 @@ class GameSessionService:
         if self._current_npcs(world_blueprint, state.player.location_id):
             actions.insert(1, ActionType.TALK)
         return actions
+
+    def _theme_visible_targets(self, state: GameState) -> list[str]:
+        if state.objective.status == "completed":
+            return []
+        if not state.world.theme_id:
+            return []
+        for theme_pack in self.content.theme_packs:
+            if theme_pack.id == state.world.theme_id:
+                return [path.label for path in theme_pack.victory_paths]
+        return []
 
     def _display_npc_label(self, value: str) -> str:
         if not value:

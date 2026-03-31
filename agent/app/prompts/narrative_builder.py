@@ -58,9 +58,13 @@ Current Scene:
 - location_id: {request.state_summary.location_id}
 - location_name: {request.scene_context.location_name}
 - story_arc_stage: {request.state_summary.story_arc_stage}
+- theme_id: {request.state_summary.theme_id or "-"}
 - hp: {request.state_summary.hp}
 - gold: {request.state_summary.gold}
 - player_flags: {", ".join(request.state_summary.player_flags) or "-"}
+- style_tags: {", ".join(request.state_summary.style_tags) or "-"}
+- objective_status: {request.state_summary.objective_status or "-"}
+- victory_path: {request.state_summary.victory_path or "-"}
 - npcs_in_scene: {", ".join(request.scene_context.npcs_in_scene) or "-"}
 - visible_targets: {", ".join(request.scene_context.visible_targets) or "-"}
 - validated_scene_summary: {request.scene_summary or "-"}

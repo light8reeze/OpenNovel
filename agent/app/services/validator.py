@@ -2,21 +2,33 @@ from __future__ import annotations
 
 from copy import deepcopy
 
-from app.game.models import ContentBundle, GameState, initial_state
+from app.game.models import ContentBundle, GameState, ThemePack, ThemeVictoryPath, initial_state
 from app.schemas.common import Action, ActionType, EngineResult
 from app.schemas.multi_agent import ValidationResult, WorldBlueprint, WorldLocation, WorldNpc
 
 
 class RuleValidator:
+    STYLE_SCORE_DELTAS: dict[ActionType, dict[str, int]] = {
+        ActionType.MOVE: {"cautious": 1},
+        ActionType.TALK: {"diplomatic": 2},
+        ActionType.INVESTIGATE: {"curious": 2},
+        ActionType.REST: {"cautious": 1},
+        ActionType.USE_ITEM: {"decisive": 1},
+        ActionType.FLEE: {"cautious": 1},
+    }
+
     def __init__(self, content: ContentBundle):
         self.content = content
 
-    def initialize_world(self, blueprint: WorldBlueprint) -> ValidationResult:
-        state = initial_state()
+    def initialize_world(self, blueprint: WorldBlueprint, *, seed: int) -> ValidationResult:
+        state = initial_state(seed=seed)
         state.player.location_id = self._normalize_location_id(blueprint, blueprint.starting_location_id) or blueprint.starting_location_id
         self._add_flag(state, f"visited:{state.player.location_id}")
         if blueprint.world_summary:
             state.world.global_flags.append(f"world:{blueprint.id}")
+        if blueprint.theme_id:
+            state.world.theme_id = blueprint.theme_id
+            state.world.theme_rules = list(blueprint.theme_rules)
         state.world.alert_by_region = {blueprint.id[:24]: min(10, max(1, len(blueprint.locations)))}
         for npc in blueprint.npcs:
             state.relations.npc_affinity.setdefault(npc.id, 5)
@@ -55,6 +67,9 @@ class RuleValidator:
         next_state.meta.seed = state.meta.seed
         validation_flags: list[str] = []
         progress_kind = self._apply_validated_patch(next_state, world_blueprint, proposal_patch, intent, validation_flags)
+        self._apply_theme_pressure(next_state, world_blueprint, intent)
+        self._apply_style_scoring(next_state, world_blueprint, intent)
+        completed_victory = self._evaluate_objective(next_state, world_blueprint, intent, progress_kind)
         allowed_choices = self._sanitize_choices(next_state, world_blueprint, proposal_choices)
         if len(allowed_choices) < 2:
             validation_flags.append("validator_regenerated_choices")
@@ -62,7 +77,14 @@ class RuleValidator:
         next_discovery = self._merge_discovery(discovery_log, proposed_facts)
         if risk_tags:
             validation_flags.extend([tag for tag in risk_tags if tag not in validation_flags])
-        engine_result = self._engine_result_for(state, next_state, intent, progress_kind, validation_flags)
+        engine_result = self._engine_result_for(
+            state,
+            next_state,
+            intent,
+            progress_kind,
+            validation_flags,
+            completed_victory,
+        )
         scene_summary = proposal_summary.strip() or self._default_scene_summary(state, next_state, world_blueprint, intent, progress_kind)
         return ValidationResult(
             state=next_state,
@@ -165,9 +187,14 @@ class RuleValidator:
                 return "talk" if first_meaningful_talk else "stalled"
             validation_flags.append("no_dialogue_target")
             return "stalled"
-        elif intent.action_type == ActionType.USE_ITEM and "torch_lit" not in state.player.flags:
-            state.player.flags.append("torch_lit")
-            return "use_item"
+        elif intent.action_type == ActionType.USE_ITEM:
+            if "torch_lit" not in state.player.flags:
+                self._add_flag(state, "torch_lit")
+                return "use_item"
+            if self._available_victory_path(state, world_blueprint, ActionType.USE_ITEM) is not None:
+                return "use_item"
+            validation_flags.append("item_use_exhausted")
+            return "stalled"
         elif intent.action_type == ActionType.REST:
             previous_hp = state.player.hp
             state.player.hp = min(100, state.player.hp + 5)
@@ -227,14 +254,36 @@ class RuleValidator:
         intent: Action,
         progress_kind: str,
         validation_flags: list[str],
+        completed_victory: ThemeVictoryPath | None,
     ) -> EngineResult:
+        if completed_victory is not None:
+            details = [
+                intent.action_type.value,
+                f"progress:{progress_kind}",
+                f"victory:{completed_victory.id}",
+                *completed_victory.details,
+                *validation_flags,
+            ]
+            return EngineResult(
+                success=True,
+                message_code="OBJECTIVE_COMPLETED",
+                location_changed=previous.player.location_id != next_state.player.location_id,
+                quest_stage_changed=previous.quests.story_arc.stage != next_state.quests.story_arc.stage,
+                ending_reached=completed_victory.id,
+                details=details[:6],
+            )
         return EngineResult(
             success=True,
             message_code=self._message_code_for(intent),
             location_changed=previous.player.location_id != next_state.player.location_id,
             quest_stage_changed=previous.quests.story_arc.stage != next_state.quests.story_arc.stage,
             ending_reached=None,
-            details=[intent.action_type.value, f"progress:{progress_kind}", *validation_flags][:6],
+            details=[
+                intent.action_type.value,
+                f"progress:{progress_kind}",
+                f"objective:{next_state.objective.status}",
+                *validation_flags,
+            ][:6],
         )
 
     def _message_code_for(self, intent: Action) -> str:
@@ -262,6 +311,9 @@ class RuleValidator:
             if not self._has_flag(state, f"talked:{npc.id}") and npc.interaction_hint:
                 verb = "대화해 속내를 떠본다"
             choices.append(f"{npc.label}{self._topic_particle(npc.label)} {verb}")
+        theme_use_item_choice = self._theme_use_item_choice(state, world_blueprint)
+        if theme_use_item_choice:
+            choices.append(theme_use_item_choice)
         current = self._world_location(world_blueprint, state.player.location_id)
         if current:
             for connection in current.connections[:2]:
@@ -367,3 +419,107 @@ class RuleValidator:
         if intent.action_type == ActionType.USE_ITEM:
             return "손에 쥔 도구를 활용하자 놓치고 있던 질감과 흔적이 눈에 들어온다."
         return world_blueprint.opening_hook
+
+    def _apply_theme_pressure(self, state: GameState, world_blueprint: WorldBlueprint, intent: Action) -> None:
+        theme_pack = self._theme_pack(state.world.theme_id)
+        if theme_pack is None or intent.action_type.value not in theme_pack.alert_actions:
+            return
+        region_id = world_blueprint.id[:24]
+        current_alert = state.world.alert_by_region.get(region_id, 0)
+        state.world.alert_by_region[region_id] = min(10, current_alert + 1)
+
+    def _apply_style_scoring(self, state: GameState, world_blueprint: WorldBlueprint, intent: Action) -> None:
+        deltas = dict(self.STYLE_SCORE_DELTAS.get(intent.action_type, {}))
+        theme_pack = self._theme_pack(state.world.theme_id)
+        if theme_pack is not None:
+            for style, value in theme_pack.style_bias.get(intent.action_type.value, {}).items():
+                if isinstance(value, int):
+                    deltas[style] = deltas.get(style, 0) + value
+        if not deltas:
+            return
+        next_scores = dict(state.player.style_scores)
+        for style, value in deltas.items():
+            next_scores[style] = max(0, next_scores.get(style, 0) + value)
+        state.player.style_scores = next_scores
+        state.player.style_tags = sorted([style for style, score in next_scores.items() if score >= 3])
+
+    def _evaluate_objective(
+        self,
+        state: GameState,
+        world_blueprint: WorldBlueprint,
+        intent: Action,
+        progress_kind: str,
+    ) -> ThemeVictoryPath | None:
+        if state.objective.status == "completed":
+            return None
+        theme_pack = self._theme_pack(state.world.theme_id)
+        if theme_pack is None:
+            return None
+        required_progress = {
+            ActionType.INVESTIGATE: "investigate",
+            ActionType.TALK: "talk",
+            ActionType.USE_ITEM: "use_item",
+        }.get(intent.action_type)
+        if required_progress is not None and progress_kind != required_progress:
+            return None
+        current_index = self._location_index(world_blueprint, state.player.location_id)
+        for victory_path in theme_pack.victory_paths:
+            if not self._matches_victory_path(state, world_blueprint, victory_path, intent.action_type, current_index):
+                continue
+            state.objective.status = "completed"
+            state.objective.victory_path = victory_path.id
+            return victory_path
+        return None
+
+    def _available_victory_path(
+        self,
+        state: GameState,
+        world_blueprint: WorldBlueprint,
+        action_type: ActionType,
+    ) -> ThemeVictoryPath | None:
+        theme_pack = self._theme_pack(state.world.theme_id)
+        if theme_pack is None or state.objective.status == "completed":
+            return None
+        current_index = self._location_index(world_blueprint, state.player.location_id)
+        for victory_path in theme_pack.victory_paths:
+            if self._matches_victory_path(state, world_blueprint, victory_path, action_type, current_index):
+                return victory_path
+        return None
+
+    def _matches_victory_path(
+        self,
+        state: GameState,
+        world_blueprint: WorldBlueprint,
+        victory_path: ThemeVictoryPath,
+        action_type: ActionType,
+        current_index: int,
+    ) -> bool:
+        if victory_path.required_action != action_type.value:
+            return False
+        if state.quests.story_arc.stage < victory_path.min_stage:
+            return False
+        required_index = victory_path.required_location_index
+        if required_index < 0:
+            required_index = max(0, len(world_blueprint.locations) + required_index)
+        return current_index == required_index
+
+    def _theme_use_item_choice(self, state: GameState, world_blueprint: WorldBlueprint) -> str | None:
+        victory_path = self._available_victory_path(state, world_blueprint, ActionType.USE_ITEM)
+        if victory_path is None:
+            return None
+        location_label = self._location_label(world_blueprint, state.player.location_id)
+        return f"{location_label}에서 {victory_path.label}{self._object_particle(victory_path.label)} 시도한다"
+
+    def _theme_pack(self, theme_id: str | None) -> ThemePack | None:
+        if not theme_id:
+            return None
+        for theme_pack in self.content.theme_packs:
+            if theme_pack.id == theme_id:
+                return theme_pack
+        return None
+
+    def _location_index(self, world_blueprint: WorldBlueprint, location_id: str) -> int:
+        for index, location in enumerate(world_blueprint.locations):
+            if location.id == location_id:
+                return index
+        return -1

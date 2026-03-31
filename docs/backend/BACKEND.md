@@ -3,14 +3,17 @@ OpenNovel Backend Guide
 ## 1. Overview
 
 현재 `main`의 공식 backend는 Python `agent` 서비스다.  
-플레이어 입력은 `GameSessionService`를 거쳐 `StoryAgent`로 전달되고, `StoryAgent`가 다음 narrative, choices, compatibility state를 생성한다.
+플레이어 입력은 `GameSessionService`를 거쳐 intent 해석, 상태 제안, deterministic rule validation, narrative 렌더링 단계를 순서대로 통과한다.
 
 핵심 흐름:
 
 ```text
 Player Input
   -> GameSessionService
-  -> StoryAgent
+  -> IntenderAgent
+  -> StoryStateManagerAgent
+  -> RuleValidator
+  -> NarratorAgent
   -> TurnResult
   -> Session Update
   -> JSON Response
@@ -29,14 +32,18 @@ Player Input
 - [agent/app/game/service.py](/Users/light8reeze/Documents/Projects/OpenNovel/agent/app/game/service.py)
   - 세션 시작, 턴 진행, 상태 조회
   - in-memory 세션 저장
-- [agent/app/agents/story.py](/Users/light8reeze/Documents/Projects/OpenNovel/agent/app/agents/story.py)
-  - narrative, choices, state, engineResult 생성
+- [agent/app/services/validator.py](/Users/light8reeze/Documents/Projects/OpenNovel/agent/app/services/validator.py)
+  - theme rule 적용
+  - objective / victory 판정
+  - cumulative style scoring
 - [agent/app/agents/story_setup.py](/Users/light8reeze/Documents/Projects/OpenNovel/agent/app/agents/story_setup.py)
   - startup preset 생성
 - [agent/app/agents/intender.py](/Users/light8reeze/Documents/Projects/OpenNovel/agent/app/agents/intender.py)
-  - direct `/intent/validate` compatibility 경로
+  - 플레이어 입력을 action으로 정규화
 - [agent/app/agents/narrator.py](/Users/light8reeze/Documents/Projects/OpenNovel/agent/app/agents/narrator.py)
-  - direct `/narrative/*` compatibility 경로
+  - validator 결과를 바탕으로 narrative / choices 렌더링
+- [agent/app/agents/state_manager.py](/Users/light8reeze/Documents/Projects/OpenNovel/agent/app/agents/state_manager.py)
+  - 상태 패치와 scene summary 초안 제안
 - [agent/app/services/file_logger.py](/Users/light8reeze/Documents/Projects/OpenNovel/agent/app/services/file_logger.py)
   - JSONL 로그와 debug turn bundle 집계
 
@@ -47,8 +54,8 @@ Frontend
   -> FastAPI routes
   -> AgentRuntime
   -> GameSessionService
-  -> StoryAgent
-  -> LLM / fallback
+  -> Intender / State Manager / RuleValidator / Narrator
+  -> LLM + deterministic validation
 ```
 
 ## 3. Session Model
@@ -61,7 +68,7 @@ Frontend
 - `history`
 - `choices`
 - `story_setup`
-- per-session `StoryAgent`
+- per-session runtime agents
 
 영속 저장소는 아직 없다.
 
@@ -89,12 +96,18 @@ Frontend
     "global_flags": ["sunken_ruins_open"],
     "alert_by_region": {
       "ruins": 6
-    }
+    },
+    "theme_id": "sunken_ruins",
+    "theme_rules": ["..."]
   },
   "quests": {
-    "sunken_ruins": {
+    "story_arc": {
       "stage": 0
     }
+  },
+  "objective": {
+    "status": "in_progress",
+    "victory_path": null
   },
   "relations": {
     "npc_affinity": {
@@ -182,15 +195,18 @@ startup 시 생성된 preset 3개를 반환한다.
 
 현재 역할 분리:
 
-- `StoryAgent`
-  - `/game/*`의 주 경로
-  - state와 narrative를 함께 생성
-- `IntenderAgent`
-  - direct intent validation용 compatibility layer
-- `NarratorAgent`
-  - direct narrative generation용 compatibility layer
 - `StorySetupAgent`
   - startup preset 생성
+- `WorldBuilderAgent`
+  - preset을 world blueprint로 확장
+- `IntenderAgent`
+  - 입력을 action으로 정규화
+- `StoryStateManagerAgent`
+  - 상태 패치 / discovery / scene summary 초안 제안
+- `RuleValidator`
+  - state truth, theme rules, style scoring, objective/victory 판정
+- `NarratorAgent`
+  - 검증된 결과를 장면으로 표현
 
 지원 provider:
 - `mock`

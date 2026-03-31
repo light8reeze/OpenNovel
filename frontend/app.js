@@ -108,6 +108,10 @@ function setLoading(isLoading, message = "응답을 기다리는 중...") {
 }
 
 function renderState(state) {
+  const themeId = state.world?.theme_id || "-";
+  const objectiveStatus = state.objective?.status || "-";
+  const victoryPath = state.objective?.victory_path || "-";
+  const styleTags = (state.player?.style_tags || []).join(", ") || "-";
   stateEl.innerHTML = `
     <dl>
       <dt>Turn</dt><dd>${state.meta.turn}</dd>
@@ -115,6 +119,10 @@ function renderState(state) {
       <dt>Gold</dt><dd>${state.player.gold}</dd>
       <dt>Location</dt><dd>${state.player.location_id}</dd>
       <dt>Story Arc Stage</dt><dd>${state.quests.story_arc.stage}</dd>
+      <dt>Theme</dt><dd>${themeId}</dd>
+      <dt>Objective</dt><dd>${objectiveStatus}</dd>
+      <dt>Victory Path</dt><dd>${victoryPath}</dd>
+      <dt>Style Tags</dt><dd>${styleTags}</dd>
     </dl>
   `;
 }

@@ -14,6 +14,9 @@ def test_start_game_returns_rust_compatible_shape() -> None:
     assert payload["state"]["meta"]["turn"] == 0
     assert payload["storySetupId"]
     assert payload["choices"] == []
+    assert payload["state"]["world"]["theme_id"]
+    assert payload["state"]["objective"]["status"] == "in_progress"
+    assert payload["state"]["objective"]["victory_path"] is None
 
 
 def test_story_setups_returns_three_presets() -> None:
@@ -123,7 +126,90 @@ def test_story_agent_progresses_session_without_engine() -> None:
     assert final_state["meta"]["turn"] == len(message_codes)
     assert final_state["quests"]["story_arc"]["stage"] >= 1
     assert final_state["player"]["gold"] == 15
-    assert payload["engineResult"]["ending_reached"] is None
+    assert payload["engineResult"]["ending_reached"] in {None, "recovered", "sealed", "bargained"}
+
+
+def test_cumulative_style_scores_activate_tags() -> None:
+    start = client.post("/game/start", json={}).json()
+    session_id = start["sessionId"]
+
+    for _ in range(2):
+        response = client.post("/game/action", json={"sessionId": session_id, "inputText": "주변을 조사한다"})
+        assert response.status_code == 200
+
+    state = response.json()["state"]
+    assert state["player"]["style_scores"]["curious"] >= 4
+    assert "curious" in state["player"]["style_tags"]
+
+
+def test_reaching_final_location_can_complete_objective_with_explicit_victory_path() -> None:
+    start = client.post("/game/start", json={}).json()
+    session_id = start["sessionId"]
+
+    opening_log = client.get("/debug/turn-log", params={"sessionId": session_id, "turn": 0}).json()
+    locations = opening_log["worldBuildResponse"]["blueprint"]["locations"]
+
+    for location in locations[1:]:
+        choices = client.get("/game/choices", params={"sessionId": session_id}).json()["choices"]
+        move_choice = next(choice for choice in choices if location["label"] in choice and "이동" in choice)
+        move_response = client.post("/game/action", json={"sessionId": session_id, "choiceText": move_choice})
+        assert move_response.status_code == 200
+
+    action = client.post("/game/action", json={"sessionId": session_id, "inputText": "주변을 조사한다"})
+    assert action.status_code == 200
+    payload = action.json()
+    assert payload["engineResult"]["message_code"] == "OBJECTIVE_COMPLETED"
+    assert payload["engineResult"]["ending_reached"] == "recovered"
+    assert payload["state"]["objective"]["status"] == "completed"
+    assert payload["state"]["objective"]["victory_path"] == "recovered"
+
+
+def test_reaching_final_location_can_complete_objective_with_talk_path() -> None:
+    start = client.post("/game/start", json={}).json()
+    session_id = start["sessionId"]
+
+    opening_log = client.get("/debug/turn-log", params={"sessionId": session_id, "turn": 0}).json()
+    locations = opening_log["worldBuildResponse"]["blueprint"]["locations"]
+
+    for location in locations[1:]:
+        choices = client.get("/game/choices", params={"sessionId": session_id}).json()["choices"]
+        move_choice = next(choice for choice in choices if location["label"] in choice and "이동" in choice)
+        move_response = client.post("/game/action", json={"sessionId": session_id, "choiceText": move_choice})
+        assert move_response.status_code == 200
+
+    choices = client.get("/game/choices", params={"sessionId": session_id}).json()["choices"]
+    talk_choice = next(choice for choice in choices if "대화" in choice)
+    action = client.post("/game/action", json={"sessionId": session_id, "choiceText": talk_choice})
+    assert action.status_code == 200
+    payload = action.json()
+    assert payload["engineResult"]["message_code"] == "OBJECTIVE_COMPLETED"
+    assert payload["engineResult"]["ending_reached"] == "bargained"
+    assert payload["state"]["objective"]["status"] == "completed"
+    assert payload["state"]["objective"]["victory_path"] == "bargained"
+
+
+def test_reaching_final_location_can_complete_objective_with_sealed_path_choice() -> None:
+    start = client.post("/game/start", json={}).json()
+    session_id = start["sessionId"]
+
+    opening_log = client.get("/debug/turn-log", params={"sessionId": session_id, "turn": 0}).json()
+    locations = opening_log["worldBuildResponse"]["blueprint"]["locations"]
+
+    for location in locations[1:]:
+        choices = client.get("/game/choices", params={"sessionId": session_id}).json()["choices"]
+        move_choice = next(choice for choice in choices if location["label"] in choice and "이동" in choice)
+        move_response = client.post("/game/action", json={"sessionId": session_id, "choiceText": move_choice})
+        assert move_response.status_code == 200
+
+    choices = client.get("/game/choices", params={"sessionId": session_id}).json()["choices"]
+    seal_choice = next(choice for choice in choices if "봉인" in choice)
+    action = client.post("/game/action", json={"sessionId": session_id, "choiceText": seal_choice})
+    assert action.status_code == 200
+    payload = action.json()
+    assert payload["engineResult"]["message_code"] == "OBJECTIVE_COMPLETED"
+    assert payload["engineResult"]["ending_reached"] == "sealed"
+    assert payload["state"]["objective"]["status"] == "completed"
+    assert payload["state"]["objective"]["victory_path"] == "sealed"
 
 
 def test_repeated_investigate_eventually_stalls_in_same_location() -> None:

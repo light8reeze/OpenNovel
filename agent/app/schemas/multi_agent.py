@@ -41,6 +41,9 @@ class WorldBlueprint(BaseModel):
     notable_locations: list[str] = Field(default_factory=list)
     important_npcs: list[str] = Field(default_factory=list)
     hidden_truths: list[str] = Field(default_factory=list)
+    theme_id: Optional[str] = None
+    theme_rules: list[str] = Field(default_factory=list)
+    objective_label: Optional[str] = None
 
 
 class WorldBuildRequest(BaseModel):

@@ -89,6 +89,13 @@ class IntenderAgent:
         if any(token in normalized for token in ("휴식", "쉰다", "rest")):
             action_type = ActionType.REST
             confidence = 0.86
+        elif any(token in normalized for token in ("봉인", "재봉인", "의식", "seal")):
+            action_type = ActionType.USE_ITEM
+            target = next(
+                (visible_target for visible_target in request.scene_context.visible_targets if self._matches_label(normalized, visible_target)),
+                None,
+            )
+            confidence = 0.88
         elif any(token in normalized for token in ("횃불", "torch", "등불", "lamp")):
             action_type = ActionType.USE_ITEM
             target = "횃불"
