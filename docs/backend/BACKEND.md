@@ -25,26 +25,26 @@ Player Input
 
 현재 `agent/app`의 실제 책임:
 
-- [agent/app/runtime.py](/Users/light8reeze/Documents/Projects/OpenNovel/agent/app/runtime.py)
+- [agent/app/runtime.py](../../agent/app/runtime.py)
   - runtime 조립
   - story setup preset 생성
   - Chroma / retrieval 초기화
-- [agent/app/game/service.py](/Users/light8reeze/Documents/Projects/OpenNovel/agent/app/game/service.py)
+- [agent/app/game/service.py](../../agent/app/game/service.py)
   - 세션 시작, 턴 진행, 상태 조회
   - in-memory 세션 저장
-- [agent/app/services/validator.py](/Users/light8reeze/Documents/Projects/OpenNovel/agent/app/services/validator.py)
+- [agent/app/services/validator.py](../../agent/app/services/validator.py)
   - theme rule 적용
   - objective / victory 판정
   - cumulative style scoring
-- [agent/app/agents/story_setup.py](/Users/light8reeze/Documents/Projects/OpenNovel/agent/app/agents/story_setup.py)
+- [agent/app/agents/story_setup.py](../../agent/app/agents/story_setup.py)
   - startup preset 생성
-- [agent/app/agents/intender.py](/Users/light8reeze/Documents/Projects/OpenNovel/agent/app/agents/intender.py)
+- [agent/app/agents/intender.py](../../agent/app/agents/intender.py)
   - 플레이어 입력을 action으로 정규화
-- [agent/app/agents/narrator.py](/Users/light8reeze/Documents/Projects/OpenNovel/agent/app/agents/narrator.py)
+- [agent/app/agents/narrator.py](../../agent/app/agents/narrator.py)
   - validator 결과를 바탕으로 narrative / choices 렌더링
-- [agent/app/agents/state_manager.py](/Users/light8reeze/Documents/Projects/OpenNovel/agent/app/agents/state_manager.py)
+- [agent/app/agents/state_manager.py](../../agent/app/agents/state_manager.py)
   - 상태 패치와 scene summary 초안 제안
-- [agent/app/services/file_logger.py](/Users/light8reeze/Documents/Projects/OpenNovel/agent/app/services/file_logger.py)
+- [agent/app/services/file_logger.py](../../agent/app/services/file_logger.py)
   - JSONL 로그와 debug turn bundle 집계
 
 추상 구조:
@@ -119,7 +119,7 @@ Frontend
 
 주의:
 - `main`에서는 이 state가 아직 던전 기반 compatibility 의미를 가진다.
-- `engineResult`도 실제 deterministic engine 결과가 아니라 compatibility metadata로 사용된다.
+- `engineResult`는 이제 validator가 확정한 진행 결과를 요약하는 compatibility 응답이다.
 
 ## 5. API
 
@@ -237,6 +237,7 @@ Retrieval:
 - streaming response
 - memory summary pipeline
 - React/TypeScript frontend
-- rule validator 중심의 multi-agent runtime
+- NPC autonomous actions
+- diegetic feedback
 
-즉 `main`의 현재 backend는 `StoryAgent` 중심 single-runtime 구조다.
+즉 `main`의 현재 backend는 validator-backed multi-agent runtime을 가진 MVP 구조다.

@@ -11,7 +11,7 @@ OpenNovel Frontend Guide
 ```text
 User Input
   -> Backend API
-  -> StoryAgent
+  -> Intender / State Manager / RuleValidator / Narrator
   -> Story Response
   -> UI Update
 ```
@@ -33,9 +33,9 @@ Plain HTML + CSS + Vanilla JavaScript
 ```
 
 실제 파일:
-- [frontend/index.html](/Users/light8reeze/Documents/Projects/OpenNovel/frontend/index.html)
-- [frontend/app.js](/Users/light8reeze/Documents/Projects/OpenNovel/frontend/app.js)
-- [frontend/styles.css](/Users/light8reeze/Documents/Projects/OpenNovel/frontend/styles.css)
+- [frontend/index.html](../../frontend/index.html)
+- [frontend/app.js](../../frontend/app.js)
+- [frontend/styles.css](../../frontend/styles.css)
 
 React / TypeScript는 아직 도입되지 않았다.
 
@@ -117,9 +117,13 @@ React / TypeScript는 아직 도입되지 않았다.
 - `Gold`
 - `Location`
 - `Quest Stage`
+- `Theme`
+- `Objective`
+- `Victory Path`
+- `Style Tags`
 
 주의:
-- 현재 `Quest Stage`는 `state.quests.sunken_ruins.stage`를 사용한다.
+- 현재 `Quest Stage`는 `state.quests.story_arc.stage`를 사용한다.
 - 위치도 compatibility id를 그대로 출력한다.
 
 ## 8. Story Graph and Debug
@@ -184,4 +188,4 @@ Story graph:
 - streaming / partial response 없음
 - mobile 최적화는 제한적
 
-즉 현재 frontend는 `StoryAgent` 기반 single-server UI를 빠르게 확인하고 디버그하기 위한 MVP 구현이다.
+즉 현재 frontend는 validator-backed single-server UI를 빠르게 확인하고 디버그하기 위한 MVP 구현이다.

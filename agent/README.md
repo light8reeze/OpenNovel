@@ -5,8 +5,11 @@
 현재 구조:
 
 - `IntenderAgent`: 플레이어 입력을 action type으로 정규화
-- `NarratorAgent`: engine result를 narrative/choices로 표현
-- `GameSessionService`: deterministic core engine, 세션 관리, `/game/*` API
+- `StoryStateManagerAgent`: scene summary와 state patch 초안 제안
+- `RuleValidator`: theme rules, style scoring, objective/victory truth 소유
+- `NarratorAgent`: validator result를 narrative/choices로 표현
+- `WorldBuilderAgent`: story setup을 world blueprint로 확장
+- `GameSessionService`: 세션 관리, `/game/*` 오케스트레이션
 - `Chroma`: role별 retrieval 문서 저장소
 
 현재 포함 범위:
@@ -31,11 +34,11 @@ role별 지원 provider:
 
 원칙:
 
-- agent 내부 game runtime이 게임 상태와 판정을 소유한다.
+- agent 내부 validator/runtime이 게임 상태와 판정을 소유한다.
 - agent는 입력 의도 검증과 narrative 표현을 같은 서비스 안에서 호출한다.
-- agent는 상태를 변경하지 않는다.
+- LLM 계층은 상태를 직접 변경하지 않는다.
 
-정확히는 LLM 계층이 상태를 변경하지 않는다. 상태 전이는 `GameSessionService`와 deterministic engine이 담당한다.
+정확히는 상태 전이는 `GameSessionService`와 `RuleValidator`가 담당한다.
 
 실행 예시:
 
@@ -76,3 +79,7 @@ export AGENT_INTENDER_API_KEY=...
 Chroma는 startup 시 `agent/content/intender_docs`, `agent/content/narrator_docs`를 자동 인덱싱한다.
 
 게임 콘텐츠는 루트 `content/` 디렉터리에서 읽는다.
+
+현재 `Phase 1`에서는 추가로 다음 데이터가 포함된다.
+
+- `content/theme_packs.json`

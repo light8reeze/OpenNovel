@@ -26,8 +26,9 @@ agent 내부 game runtime이 게임 상태와 판정을 소유한다.
 
 - action 판정
 - state 변경
-- event 처리
-- quest 진행
+- theme rule 적용
+- style scoring
+- objective / victory path 판정
 
 agent 내부 LLM 계층은 표현과 입력 보조를 담당한다.
 
@@ -63,7 +64,9 @@ agent는 Python 프로젝트이며 FastAPI 기반으로 구성되어 있다.
 - `agent/app/services/fallback_renderer.py`
   - fallback narrative 생성
 - `agent/app/game/`
-  - deterministic engine, session service, game API 모델
+  - session service, game API 모델, state 모델
+- `agent/app/services/validator.py`
+  - deterministic validation, theme rules, objective 판정
 - `agent/app/services/file_logger.py`
   - agent JSONL 파일 로그 기록
 - `agent/tests/test_workflows.py`
@@ -96,6 +99,7 @@ agent는 Python 프로젝트이며 FastAPI 기반으로 구성되어 있다.
 
 - `회랑`, `hall` → `MOVE`
 - `관리인`, `caretaker`, `talk` → `TALK`
+- `봉인`, `의식`, `seal` → `USE_ITEM`
 - `휴식` → `REST`
 - `횃불` → `USE_ITEM`
 - 그 외 기본값 → `INVESTIGATE`

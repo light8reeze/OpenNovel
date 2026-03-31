@@ -12,8 +12,10 @@
 
 - `IntenderAgent`
   - 플레이어 자연어 입력을 `Action` 후보로 정규화
+- `StoryStateManagerAgent`
+  - 다음 턴의 scene summary, state patch, choice 후보를 제안
 - `NarratorAgent`
-  - engine이 확정한 결과를 바탕으로 장면 서술과 선택지를 생성
+  - validator가 확정한 결과를 바탕으로 장면 서술과 선택지를 생성
 
 ## 1. 공통 System Rules
 
@@ -76,7 +78,7 @@
   - `location_id`
   - `hp`
   - `gold`
-  - `sunken_ruins_stage`
+  - `story_arc_stage`
   - `player_flags`
 - `Scene Context`
   - `location_name`
@@ -92,17 +94,12 @@
 
 ### 현재 target vocabulary
 
-던전 시나리오 기준으로 다음 vocabulary를 사용한다.
+현재 target vocabulary는 scene context에서 서버가 노출한 값들이다.
 
-- `hall`
-- `trap_room`
-- `sanctum`
-- `ruins_entrance`
-- `caretaker`
-- `torch`
-
-중요한 점은 retrieval 문서도 이 vocabulary를 그대로 써야 한다는 것이다.  
-canonical location id인 `collapsed_hall`, `trap_chamber`, `buried_sanctum`은 engine 내부 상태용이고, prompt에서 target vocabulary로 직접 유도하지 않는다.
+- 현재 location의 연결된 장소 label
+- 현재 location의 NPC label
+- 테마별 victory path label
+- `횃불`
 
 ## 3. Narrator Prompt
 
@@ -112,7 +109,7 @@ canonical location id인 `collapsed_hall`, `trap_chamber`, `buried_sanctum`은 e
 
 ### 목적
 
-- engine이 이미 확정한 결과를 장면 서술로 표현한다.
+- validator가 이미 확정한 결과를 장면 서술로 표현한다.
 - 허용된 choice 목록 안에서만 선택지를 출력한다.
 - 분위기와 NPC 화법을 retrieval context로 보강한다.
 
@@ -122,7 +119,7 @@ canonical location id인 `collapsed_hall`, `trap_chamber`, `buried_sanctum`은 e
 
 - 공통 `SYSTEM_RULES`
 - 역할 설명
-  - engine이 확정한 결과를 바탕으로 장면 묘사와 선택지를 JSON으로 출력
+  - validator가 확정한 결과를 바탕으로 장면 묘사와 선택지를 JSON으로 출력
 - 출력 JSON 형식 설명
 
 출력 shape:
@@ -146,7 +143,11 @@ canonical location id인 `collapsed_hall`, `trap_chamber`, `buried_sanctum`은 e
   - `location_id`
   - `hp`
   - `gold`
-  - `sunken_ruins_stage`
+  - `story_arc_stage`
+  - `theme_id`
+  - `style_tags`
+  - `objective_status`
+  - `victory_path`
   - `player_flags`
 - `Scene Context`
   - `location_name`
@@ -164,7 +165,7 @@ canonical location id인 `collapsed_hall`, `trap_chamber`, `buried_sanctum`은 e
 - 규칙
   - `allowed_choices` 밖의 선택지 생성 금지
   - 한국어 출력
-  - 분위기는 `dark ruins exploration`
+- 분위기는 현재 world blueprint와 theme state를 따른다
   - 과장된 시적 표현 금지
   - choice는 2개 이상 4개 이하
   - retrieval은 장면/말투 참고용

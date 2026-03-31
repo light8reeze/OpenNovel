@@ -5,7 +5,7 @@
 OpenNovel은 AI 기반 인터랙티브 소설 게임입니다.  
 현재 `main` 브랜치는 Python 단일 서버가 백엔드 API와 브라우저 UI를 함께 제공하는 형태로 동작합니다.
 
-런타임에서는 소규모 story setup preset으로 세션을 시작하고, `StoryAgent`가 다음 장면, 선택지, 경량 compatibility state snapshot을 생성합니다.
+런타임에서는 소규모 story setup preset으로 세션을 시작하고, themed world blueprint를 만든 뒤 deterministic validator가 상태를 확정하고 narrator가 장면과 선택지를 렌더링합니다.
 
 ## 현재 아키텍처
 
@@ -15,7 +15,7 @@ OpenNovel은 AI 기반 인터랙티브 소설 게임입니다.
 플레이어 입력
   -> FastAPI 서버
   -> GameSessionService
-  -> StoryAgent
+  -> Intender / State Manager / RuleValidator / Narrator
   -> 내러티브 / 선택지 / 상태 스냅샷
   -> UI 갱신
 ```
@@ -23,7 +23,9 @@ OpenNovel은 AI 기반 인터랙티브 소설 게임입니다.
 현재 구현 요소:
 - 공식 런타임인 Python `agent` 서비스
 - startup 시 3개의 story preset을 생성하거나 fallback으로 채우는 `StorySetupAgent`
-- `/game/*` 경로의 진행을 담당하는 `StoryAgent`
+- `WorldBuilderAgent` 기반 world blueprint 생성
+- `RuleValidator` 기반 theme/objective/style 판정
+- `/game/*` 경로를 오케스트레이션하는 `GameSessionService`
 - compatibility endpoint용 `IntenderAgent`, `NarratorAgent`
 - 메모리 기반 세션 저장
 - Chroma 기반 retrieval
@@ -34,7 +36,7 @@ OpenNovel은 AI 기반 인터랙티브 소설 게임입니다.
 - 영속 데이터베이스 없음
 - streaming 응답 없음
 - React/TypeScript frontend 없음
-- `main`의 compatibility state에는 아직 `quests.sunken_ruins.stage` 같은 예전 필드명이 남아 있음
+- compatibility state에는 아직 dungeon-era 필드명이 일부 남아 있음
 
 ## 저장소 구조
 
