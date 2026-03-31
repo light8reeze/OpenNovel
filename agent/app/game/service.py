@@ -22,8 +22,8 @@ from app.game.models import (
     StateResponse,
     TurnResult,
 )
-from app.schemas.common import SceneContext
-from app.schemas.intent import IntentValidationRequest
+from app.schemas.common import Action, ActionType, SceneContext
+from app.schemas.intent import IntentValidationRequest, IntentValidationResponse
 from app.schemas.multi_agent import ValidationResult, WorldBlueprint, WorldNpc
 from app.schemas.narrative import NarrativeRequest
 from app.schemas.story import StoryMessage
@@ -200,7 +200,7 @@ class GameSessionService:
             state_summary=state.summary(),
             scene_context=self._scene_context(state, world_blueprint),
         )
-        intent = agents.intender.handle(intent_request)
+        intent = self._intent_from_choice(payload, current_choices, state, world_blueprint) or agents.intender.handle(intent_request)
         proposal = agents.state_manager.propose(state, world_blueprint, discovery_log, history, intent.action)
         validation = self.validator.validate_transition(
             state=state,
@@ -390,30 +390,79 @@ class GameSessionService:
         themed = world_blueprint.model_copy(deep=True)
         themed.theme_id = theme_pack.id
         themed.theme_rules = list(theme_pack.rules)
-        themed.title = f"{theme_pack.title_prefix} | {world_blueprint.title}"
-        themed.world_summary = f"{theme_pack.summary_prefix} {world_blueprint.world_summary}".strip()
-        themed.tone = theme_pack.tone
-        themed.opening_hook = f"{theme_pack.opening_hook} {world_blueprint.opening_hook}".strip()
         themed.objective_label = "던전의 핵심 대상을 원하는 방식으로 해결한다."
-        themed.npcs = self._build_theme_npcs(themed, theme_pack)
+        themed.npcs = self._build_theme_npcs(world_blueprint, theme_pack)
         themed.important_npcs = [npc.label for npc in themed.npcs]
         return themed
 
+    def _intent_from_choice(
+        self,
+        payload: ActionRequest,
+        current_choices: list[str],
+        state: GameState,
+        world_blueprint: WorldBlueprint,
+    ) -> IntentValidationResponse | None:
+        if not payload.choice_text:
+            return None
+        choice_text = payload.choice_text.strip()
+        if not choice_text or choice_text not in current_choices:
+            return None
+
+        location = self._world_location(world_blueprint, state.player.location_id)
+        current_label = self._world_location_name(state.player.location_id, world_blueprint)
+
+        if "횃불" in choice_text:
+            action = Action(action_type=ActionType.USE_ITEM, target="횃불", raw_input=choice_text)
+        elif "잠시 숨을 고르" in choice_text or "상황을 정리" in choice_text:
+            action = Action(action_type=ActionType.REST, raw_input=choice_text)
+        elif "조사" in choice_text:
+            action = Action(action_type=ActionType.INVESTIGATE, target=current_label, raw_input=choice_text)
+        elif "대화" in choice_text:
+            target = next(
+                (
+                    npc.label
+                    for npc in self._current_npcs(world_blueprint, state.player.location_id)
+                    if choice_text.startswith(f"{npc.label}{self.validator._topic_particle(npc.label)}")
+                    or choice_text.startswith(npc.label)
+                ),
+                None,
+            )
+            action = Action(action_type=ActionType.TALK, target=target, raw_input=choice_text)
+        elif "이동한다" in choice_text:
+            target = None
+            if location:
+                for connection in location.connections:
+                    label = self._world_location_name(connection, world_blueprint)
+                    if choice_text.startswith(f"{label}{self.validator._direction_particle(label)} 이동한다"):
+                        target = label
+                        break
+            action = Action(action_type=ActionType.MOVE, target=target, raw_input=choice_text)
+        else:
+            return None
+
+        return IntentValidationResponse(
+            action=action,
+            confidence=1.0,
+            validation_flags=["choice_exact_match"],
+            source="choice_match",
+        )
+
     def _build_theme_npcs(self, world_blueprint: WorldBlueprint, theme_pack: ThemePack) -> list[WorldNpc]:
-        if not theme_pack.npc_roles:
+        if not theme_pack.npc_roles or not world_blueprint.npcs:
             return world_blueprint.npcs
         npcs: list[WorldNpc] = []
         last_index = max(0, len(world_blueprint.locations) - 1)
-        for role in theme_pack.npc_roles:
+        for index, base_npc in enumerate(world_blueprint.npcs):
+            role = theme_pack.npc_roles[min(index, len(theme_pack.npc_roles) - 1)]
             location_index = role.location_index if role.location_index >= 0 else last_index
             location_index = min(max(location_index, 0), last_index)
             npcs.append(
                 WorldNpc(
-                    id=role.id,
-                    label=role.label,
+                    id=base_npc.id,
+                    label=base_npc.label,
                     home_location_id=world_blueprint.locations[location_index].id,
-                    role=role.role,
-                    interaction_hint=role.interaction_hint,
+                    role=role.role or base_npc.role,
+                    interaction_hint=role.interaction_hint or base_npc.interaction_hint,
                 )
             )
         return npcs

@@ -185,6 +185,8 @@ class RuleValidator:
                     state.quests.story_arc.stage = min(6, state.quests.story_arc.stage + 1)
                 state.relations.npc_affinity[npc_id] = min(10, state.relations.npc_affinity.get(npc_id, 5) + 1)
                 return "talk" if first_meaningful_talk else "stalled"
+            if self._available_victory_path(state, world_blueprint, ActionType.TALK) is not None:
+                return "talk"
             validation_flags.append("no_dialogue_target")
             return "stalled"
         elif intent.action_type == ActionType.USE_ITEM:
@@ -311,6 +313,10 @@ class RuleValidator:
             if not self._has_flag(state, f"talked:{npc.id}") and npc.interaction_hint:
                 verb = "대화해 속내를 떠본다"
             choices.append(f"{npc.label}{self._topic_particle(npc.label)} {verb}")
+        if not self._current_npcs(world_blueprint, state.player.location_id) and self._available_victory_path(
+            state, world_blueprint, ActionType.TALK
+        ):
+            choices.append("이곳에 남은 기운과 대화해 본다")
         theme_use_item_choice = self._theme_use_item_choice(state, world_blueprint)
         if theme_use_item_choice:
             choices.append(theme_use_item_choice)

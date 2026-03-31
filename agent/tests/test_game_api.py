@@ -51,6 +51,23 @@ def test_start_game_opening_and_choices_reflect_selected_story_setup() -> None:
     assert payload["choices"] == []
 
 
+def test_theme_pack_preserves_story_setup_world_identity() -> None:
+    presets = client.get("/story-setups").json()["presets"]
+    selected = presets[0]
+    response = client.post("/game/start", json={"storySetupId": selected["id"]})
+    assert response.status_code == 200
+    payload = response.json()
+
+    opening_log = client.get("/debug/turn-log", params={"sessionId": payload["sessionId"], "turn": 0})
+    assert opening_log.status_code == 200
+    blueprint = opening_log.json()["worldBuildResponse"]["blueprint"]
+
+    assert blueprint["title"] == selected["title"]
+    assert blueprint["world_summary"] == selected["world_summary"]
+    assert blueprint["opening_hook"] == selected["opening_hook"]
+    assert blueprint["theme_id"]
+
+
 def test_game_choices_returns_current_suggestions_only_on_request() -> None:
     start = client.post("/game/start", json={"storySetupId": "sunken_ruins"}).json()
     assert start["choices"] == []
@@ -255,6 +272,31 @@ def test_talk_and_move_create_different_progress_kinds() -> None:
 
     if talk_choice and move_choice:
         assert talk_bundle["validationResponse"]["progress_kind"] != move_bundle["validationResponse"]["progress_kind"]
+
+
+def test_choice_text_uses_exact_visible_move_choice_without_reinterpreting_target() -> None:
+    presets = client.get("/story-setups").json()["presets"]
+    start = client.post("/game/start", json={"storySetupId": presets[0]["id"]}).json()
+    session_id = start["sessionId"]
+
+    opening_choices = client.get("/game/choices", params={"sessionId": session_id}).json()["choices"]
+    move_choice = next(choice for choice in opening_choices if "이동" in choice)
+    move_payload = client.post("/game/action", json={"sessionId": session_id, "choiceText": move_choice}).json()
+
+    assert move_payload["engineResult"]["message_code"] == "MOVE_OK"
+    assert move_payload["engineResult"]["location_changed"] is True
+
+    move_log = client.get("/debug/turn-log", params={"sessionId": session_id, "turn": 1}).json()
+    opening_log = client.get("/debug/turn-log", params={"sessionId": session_id, "turn": 0}).json()
+    assert move_log["intentResponse"]["source"] == "choice_match"
+    assert move_log["intentResponse"]["action"]["action_type"] == "MOVE"
+    target_label = move_log["intentResponse"]["action"]["target"]
+    assert isinstance(target_label, str) and target_label
+    assert target_label in move_choice
+
+    world_locations = opening_log["worldBuildResponse"]["blueprint"]["locations"]
+    target_location_id = next(location["id"] for location in world_locations if location["label"] == target_label)
+    assert move_log["gameResponse"]["state"]["player"]["location_id"] == target_location_id
 
 
 def test_frontend_shell_is_served_from_agent() -> None:
