@@ -143,7 +143,7 @@ class GameSessionService:
         response = StartResponse(
             sessionId=session_id,
             narrative=opening.narrative,
-            choices=[],
+            choices=opening.choices,
             state=initial_validation.state,
             storySetupId=story_setup.id,
         )
@@ -244,7 +244,7 @@ class GameSessionService:
             )
         response = ActionResponse(
             narrative=narrative.narrative,
-            choices=[],
+            choices=narrative.choices,
             engineResult=validation.engine_result,
             state=validation.state,
             storySetupId=story_setup.id,
@@ -424,6 +424,47 @@ class GameSessionService:
             ]
         ).lower()
         keyword_groups = {
+            "mud_village": (
+                ("진흙", 5),
+                ("마을", 3),
+                ("실종", 4),
+                ("무당", 5),
+                ("산신", 6),
+                ("제물", 4),
+                ("사당", 2),
+                ("기억", 3),
+                ("의식", 5),
+                ("제단", 3),
+                ("ritual", 5),
+                ("spirit", 4),
+                ("memory", 3),
+            ),
+            "royal_investigation": (
+                ("궁", 5),
+                ("침전", 4),
+                ("왕", 4),
+                ("독", 4),
+                ("어의", 4),
+                ("상궁", 3),
+                ("내관", 3),
+                ("royal", 5),
+                ("court", 5),
+                ("palace", 5),
+                ("poison", 4),
+            ),
+            "northern_frontier": (
+                ("북방", 6),
+                ("개척", 5),
+                ("설원", 4),
+                ("요새", 4),
+                ("보급", 4),
+                ("겨울", 4),
+                ("frontier", 6),
+                ("winter", 4),
+                ("outpost", 4),
+                ("fort", 4),
+                ("survival", 3),
+            ),
             "cursed_cathedral": (
                 ("사찰", 4),
                 ("성당", 4),
@@ -491,8 +532,11 @@ class GameSessionService:
 
         location = self._world_location(world_blueprint, state.player.location_id)
         current_label = self._world_location_name(state.player.location_id, world_blueprint)
+        themed_action = self._theme_action_from_choice(choice_text, state, world_blueprint)
 
-        if "횃불" in choice_text:
+        if themed_action is not None:
+            action = themed_action
+        elif "횃불" in choice_text:
             action = Action(action_type=ActionType.USE_ITEM, target="횃불", raw_input=choice_text)
         elif "잠시 숨을 고르" in choice_text or "상황을 정리" in choice_text:
             action = Action(action_type=ActionType.REST, raw_input=choice_text)
@@ -527,6 +571,28 @@ class GameSessionService:
             validation_flags=["choice_exact_match"],
             source="choice_match",
         )
+
+    def _theme_action_from_choice(
+        self,
+        choice_text: str,
+        state: GameState,
+        world_blueprint: WorldBlueprint,
+    ) -> Action | None:
+        theme_pack = next((item for item in self.content.theme_packs if item.id == state.world.theme_id), None)
+        if theme_pack is None:
+            return None
+
+        current_label = self._world_location_name(state.player.location_id, world_blueprint)
+        for victory_path in theme_pack.victory_paths:
+            if victory_path.required_action == ActionType.USE_ITEM.value:
+                exact_choice = f"{current_label}에서 {victory_path.label}{self.validator._object_particle(victory_path.label)} 시도한다"
+                if choice_text == exact_choice or victory_path.label in choice_text:
+                    return Action(action_type=ActionType.USE_ITEM, target=victory_path.label, raw_input=choice_text)
+            elif victory_path.required_action == ActionType.TALK.value and victory_path.label in choice_text:
+                return Action(action_type=ActionType.TALK, target=victory_path.label, raw_input=choice_text)
+            elif victory_path.required_action == ActionType.INVESTIGATE.value and victory_path.label in choice_text:
+                return Action(action_type=ActionType.INVESTIGATE, target=current_label, raw_input=choice_text)
+        return None
 
     def _build_theme_npcs(self, world_blueprint: WorldBlueprint, theme_pack: ThemePack) -> list[WorldNpc]:
         if not theme_pack.npc_roles or not world_blueprint.npcs:

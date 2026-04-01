@@ -30,7 +30,7 @@ def render_opening(request: NarrativeRequest) -> NarrativeResponse:
             opening_hook=opening_hook,
             world_summary=world_summary,
         ).strip(),
-        choices=request.allowed_choices[:4],
+        choices=request.allowed_choices[:6],
         source="template",
         used_fallback=True,
     )
@@ -52,7 +52,7 @@ def render_turn(request: NarrativeRequest) -> NarrativeResponse:
             narrative = f"{narrative} {latest}."
     return NarrativeResponse(
         narrative=narrative,
-        choices=request.allowed_choices[:4],
+        choices=request.allowed_choices[:6],
         source="template",
         used_fallback=True,
     )

@@ -1,10 +1,12 @@
 from fastapi.testclient import TestClient
 
 from app.game.models import initial_state
+from app.agents.narrator import NarratorAgent
 from app.main import app
 from app.runtime import get_runtime
-from app.schemas.common import Action, ActionType
-from app.schemas.multi_agent import WorldBlueprint, WorldLocation
+from app.schemas.common import Action, ActionType, EngineResult, SceneContext, StateSummary
+from app.schemas.narrative import NarrativeRequest, NarrativeResponse
+from app.schemas.multi_agent import WorldBlueprint, WorldLocation, WorldNpc
 from app.schemas.story_setup import StorySetup
 
 
@@ -18,7 +20,7 @@ def test_start_game_returns_rust_compatible_shape() -> None:
     assert payload["sessionId"].startswith("session-")
     assert payload["state"]["meta"]["turn"] == 0
     assert payload["storySetupId"]
-    assert payload["choices"] == []
+    assert len(payload["choices"]) >= 2
     assert payload["state"]["world"]["theme_id"]
     assert payload["state"]["objective"]["status"] == "in_progress"
     assert payload["state"]["objective"]["victory_path"] is None
@@ -53,7 +55,7 @@ def test_start_game_opening_and_choices_reflect_selected_story_setup() -> None:
     assert response.status_code == 200
     payload = response.json()
     assert selected["title"] in payload["narrative"]
-    assert payload["choices"] == []
+    assert len(payload["choices"]) >= 2
 
 
 def test_theme_pack_preserves_story_setup_world_identity() -> None:
@@ -132,7 +134,7 @@ def test_world_builder_fallback_seed_preserves_setup_genre() -> None:
 
 def test_game_choices_returns_current_suggestions_only_on_request() -> None:
     start = client.post("/game/start", json={"storySetupId": "sunken_ruins"}).json()
-    assert start["choices"] == []
+    assert len(start["choices"]) >= 2
 
     choices_response = client.get("/game/choices", params={"sessionId": start["sessionId"]})
     assert choices_response.status_code == 200
@@ -146,6 +148,78 @@ def test_game_choices_returns_current_suggestions_only_on_request() -> None:
     )
     assert any("조사" in choice for choice in choices_payload["choices"])
     assert any("이동" in choice for choice in choices_payload["choices"])
+
+
+def test_narrator_validate_backfills_missing_allowed_choices() -> None:
+    narrator = NarratorAgent(
+        settings=get_runtime().narrator.settings,
+        llm_client=get_runtime().intender.llm_client,
+        retrieval=get_runtime().retrieval,
+    )
+    request = NarrativeRequest(
+        state_summary=StateSummary(turn=0, location_id="village_center", hp=100, gold=15, story_arc_stage=0),
+        scene_context=SceneContext(location_name="마을 중앙"),
+        engine_result=EngineResult(
+            success=True,
+            message_code="WORLD_INITIALIZED",
+            location_changed=False,
+            quest_stage_changed=False,
+        ),
+        allowed_choices=[
+            "마을 중앙에서 마을 사람들의 불안한 시선을 조사한다",
+            "촌장과 대화해 속내를 떠본다",
+            "마을 사당으로 이동한다",
+            "촌장 집으로 이동한다",
+            "숲 가장자리로 이동한다",
+            "횃불을 들어 주변을 더 자세히 살핀다",
+        ],
+    )
+    response = NarrativeResponse(
+        narrative="차가운 새벽 안개가 마을 중앙을 덮고 있다.",
+        choices=[
+            "마을 중앙에서 마을 사람들의 불안한 시선을 조사한다",
+            "촌장과 대화해 속내를 떠본다",
+            "촌장 집으로 이동한다",
+            "숲 가장자리로 이동한다",
+        ],
+        source="gemini_llm",
+    )
+
+    validated = narrator._validate("opening", response, request)
+
+    assert "마을 사당으로 이동한다" in validated.choices
+    assert len(validated.choices) == 6
+
+
+def test_repeat_talk_is_deprioritized_after_first_conversation() -> None:
+    runtime = get_runtime()
+    state = initial_state(seed=7)
+    state.player.location_id = "square"
+    state.player.flags = ["visited:square", "talked:elder"]
+    blueprint = WorldBlueprint(
+        id="branching_story",
+        title="테스트",
+        world_summary="테스트",
+        tone="테스트",
+        core_conflict="테스트",
+        player_goal="테스트",
+        opening_hook="테스트",
+        starting_location_id="square",
+        locations=[
+            WorldLocation(id="square", label="광장", connections=["shrine", "forest"], investigation_hooks=["수상한 발자국"]),
+            WorldLocation(id="shrine", label="사당", connections=["square"]),
+            WorldLocation(id="forest", label="숲", connections=["square"]),
+        ],
+        npcs=[WorldNpc(id="elder", label="촌장", home_location_id="square", interaction_hint="무언가를 알고 있다.")],
+    )
+
+    choices = runtime.validator._choices_for_state(state, blueprint)
+
+    move_indexes = [index for index, choice in enumerate(choices) if "이동" in choice]
+    talk_indexes = [index for index, choice in enumerate(choices) if "대화" in choice]
+    assert move_indexes
+    assert talk_indexes
+    assert min(move_indexes) < min(talk_indexes)
 
 
 def test_start_game_falls_back_to_default_story_setup_for_unknown_id() -> None:
@@ -198,7 +272,7 @@ def test_story_agent_progresses_session_without_engine() -> None:
         response = client.post("/game/action", json={"sessionId": session_id, "inputText": step})
         assert response.status_code == 200
         payload = response.json()
-        assert payload["choices"] == []
+        assert len(payload["choices"]) >= 2
         message_codes.append(payload["engineResult"]["message_code"])
     assert all(code for code in message_codes)
     final_state = payload["state"]
@@ -289,6 +363,30 @@ def test_reaching_final_location_can_complete_objective_with_sealed_path_choice(
     assert payload["engineResult"]["ending_reached"] == "sealed"
     assert payload["state"]["objective"]["status"] == "completed"
     assert payload["state"]["objective"]["victory_path"] == "sealed"
+
+
+def test_theme_victory_choice_text_preserves_use_item_resolution() -> None:
+    start = client.post("/game/start", json={}).json()
+    session_id = start["sessionId"]
+
+    opening_log = client.get("/debug/turn-log", params={"sessionId": session_id, "turn": 0}).json()
+    locations = opening_log["worldBuildResponse"]["blueprint"]["locations"]
+
+    for location in locations[1:]:
+        choices = client.get("/game/choices", params={"sessionId": session_id}).json()["choices"]
+        move_choice = next(choice for choice in choices if location["label"] in choice and "이동" in choice)
+        move_response = client.post("/game/action", json={"sessionId": session_id, "choiceText": move_choice})
+        assert move_response.status_code == 200
+
+    choices = client.get("/game/choices", params={"sessionId": session_id}).json()["choices"]
+    seal_choice = next(choice for choice in choices if "봉인" in choice)
+    action = client.post("/game/action", json={"sessionId": session_id, "choiceText": seal_choice})
+    assert action.status_code == 200
+    payload = action.json()
+    turn_log = client.get("/debug/turn-log", params={"sessionId": session_id, "turn": payload["state"]["meta"]["turn"]}).json()
+
+    assert turn_log["intentResponse"]["action"]["action_type"] == "USE_ITEM"
+    assert payload["engineResult"]["ending_reached"] == "sealed"
 
 
 def test_repeated_investigate_eventually_stalls_in_same_location() -> None:

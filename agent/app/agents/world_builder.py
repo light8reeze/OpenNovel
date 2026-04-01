@@ -25,7 +25,8 @@ class WorldBuilderAgent:
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
             )
-            blueprint = WorldBlueprint.model_validate(result.payload)
+            payload = self._repair_payload(result.payload, story_setup)
+            blueprint = WorldBlueprint.model_validate(payload)
             return WorldBuildResponse(
                 blueprint=self._normalize_blueprint(blueprint, story_setup),
                 source=f"{result.provider}_llm",
@@ -50,6 +51,30 @@ class WorldBuilderAgent:
                 model=self.settings.model,
                 used_fallback=True,
             )
+
+    def _repair_payload(self, payload: object, story_setup: StorySetup) -> object:
+        if not isinstance(payload, dict):
+            return payload
+        required = {"id", "title", "world_summary", "tone", "core_conflict", "player_goal", "opening_hook"}
+        if required.issubset(payload.keys()):
+            return payload
+        template = payload.get("blueprint_template")
+        if isinstance(template, dict):
+            repaired = dict(template)
+            repaired["id"] = story_setup.id
+            repaired["title"] = story_setup.title
+            repaired["world_summary"] = story_setup.world_summary
+            repaired["tone"] = story_setup.tone
+            repaired["core_conflict"] = repaired.get("core_conflict") or story_setup.player_goal
+            repaired["player_goal"] = story_setup.player_goal
+            repaired["opening_hook"] = story_setup.opening_hook
+            return repaired
+        nested_setup = payload.get("story_setup")
+        if isinstance(nested_setup, dict):
+            fallback = self._fallback_blueprint(story_setup).model_dump(mode="json")
+            fallback["core_conflict"] = nested_setup.get("player_goal") or story_setup.player_goal
+            return fallback
+        return payload
 
     def _normalize_blueprint(self, blueprint: WorldBlueprint, story_setup: StorySetup) -> WorldBlueprint:
         locations = self._normalize_locations(blueprint, story_setup)

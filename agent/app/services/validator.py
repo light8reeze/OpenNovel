@@ -312,6 +312,7 @@ class RuleValidator:
 
     def _choices_for_state(self, state: GameState, world_blueprint: WorldBlueprint) -> list[str]:
         choices: list[str] = []
+        repeat_talk_choices: list[str] = []
         location = self._world_location(world_blueprint, state.player.location_id)
         location_label = self._location_label(world_blueprint, state.player.location_id)
         investigate_victory = self._available_victory_path(state, world_blueprint, ActionType.INVESTIGATE)
@@ -326,9 +327,13 @@ class RuleValidator:
             choices.append(f"{location_label} 주변을 다시 살피며 놓친 흔적이 없는지 확인한다")
         for npc in self._current_npcs(world_blueprint, state.player.location_id)[:1]:
             verb = "대화한다"
+            talk_choice = f"{npc.label}{self._topic_particle(npc.label)} {verb}"
             if not self._has_flag(state, f"talked:{npc.id}") and npc.interaction_hint:
                 verb = "대화해 속내를 떠본다"
-            choices.append(f"{npc.label}{self._topic_particle(npc.label)} {verb}")
+                talk_choice = f"{npc.label}{self._topic_particle(npc.label)} {verb}"
+                choices.append(talk_choice)
+            else:
+                repeat_talk_choices.append(talk_choice)
         if not self._current_npcs(world_blueprint, state.player.location_id) and self._available_victory_path(
             state, world_blueprint, ActionType.TALK
         ):
@@ -343,6 +348,7 @@ class RuleValidator:
                 if label:
                     particle = self._direction_particle(label)
                     choices.append(f"{label}{particle} 이동한다")
+        choices.extend(repeat_talk_choices)
         if "torch" in state.player.inventory and "torch_lit" not in state.player.flags:
             choices.append("횃불을 들어 주변을 더 자세히 살핀다")
         if state.player.hp < 90 or state.quests.story_arc.stage >= 2:

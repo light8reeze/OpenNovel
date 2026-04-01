@@ -67,7 +67,8 @@ class NarratorAgent:
         return self.retrieval.search_for_narrator(kind, request)
 
     def _validate(self, kind: str, response: NarrativeResponse, request: NarrativeRequest) -> NarrativeResponse:
-        response.choices = response.choices[:4]
+        allowed_choices = [choice.strip() for choice in request.allowed_choices if isinstance(choice, str) and choice.strip()]
+        response.choices = allowed_choices[:6]
         if not response.narrative.strip():
             fallback = self._fallback(kind, request, RetrievalContext(), "invalid_narrative_output")
             fallback.safety_flags.append("invalid_narrative_output")

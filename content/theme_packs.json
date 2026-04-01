@@ -258,5 +258,202 @@
       "INVESTIGATE": {"curious": 2},
       "TALK": {"diplomatic": 1}
     }
+  },
+  {
+    "id": "mud_village",
+    "title_prefix": "진흙 마을의 의식",
+    "summary_prefix": "고립된 진흙 마을과 산중 제단 사이에서 오래된 실종과 맹세가 뒤엉킨다.",
+    "tone": "음울하고 신비로운 의례",
+    "opening_hook": "안개 속 제단이 오래 묻혀 있던 실종의 흔적과 기억의 대가를 다시 끌어올린다.",
+    "rules": [
+      "의식의 장소에서는 기억, 제물, 맹세가 서로를 자극한다.",
+      "조사는 숨겨진 거래의 전말을 드러내고, 도구 사용은 의식을 봉합하거나 깨운다."
+    ],
+    "npc_roles": [
+      {
+        "id": "mudang",
+        "label": "박수무당",
+        "role": "caretaker",
+        "interaction_hint": "산신과 맺은 오래된 약속과 의식의 금기를 알고 있다.",
+        "location_index": 0
+      },
+      {
+        "id": "village_elder",
+        "label": "마을 이장",
+        "role": "rival",
+        "interaction_hint": "위기를 넘기기 위해 진실을 감추려 한다.",
+        "location_index": 1
+      },
+      {
+        "id": "mountain_spirit",
+        "label": "산신의 메아리",
+        "role": "keeper",
+        "interaction_hint": "제단 앞에서 기억과 대가를 흥정한다.",
+        "location_index": -1
+      }
+    ],
+    "victory_paths": [
+      {
+        "id": "recovered",
+        "label": "잃은 기억 회수",
+        "required_action": "INVESTIGATE",
+        "required_location_index": -1,
+        "min_stage": 3,
+        "details": ["memory_recovered", "oath_truth_revealed"]
+      },
+      {
+        "id": "sealed",
+        "label": "의식 봉합",
+        "required_action": "USE_ITEM",
+        "required_location_index": -1,
+        "min_stage": 3,
+        "details": ["ritual_sealed", "offering_bound"]
+      },
+      {
+        "id": "bargained",
+        "label": "산신과 재협상",
+        "required_action": "TALK",
+        "required_location_index": -1,
+        "min_stage": 3,
+        "details": ["spirit_bargain", "memory_price_renegotiated"]
+      }
+    ],
+    "alert_actions": ["MOVE", "USE_ITEM", "TALK"],
+    "style_bias": {
+      "INVESTIGATE": {"curious": 1},
+      "TALK": {"diplomatic": 1},
+      "USE_ITEM": {"decisive": 1}
+    }
+  },
+  {
+    "id": "royal_investigation",
+    "title_prefix": "궁중 음모",
+    "summary_prefix": "침전과 약방, 밀실 사이에서 독과 비밀이 오가는 궁중 수사다.",
+    "tone": "긴장된 궁중 추리",
+    "opening_hook": "침전 안에 남은 냄새와 침묵이 누군가의 치밀한 손길을 가리킨다.",
+    "rules": [
+      "궁궐에서는 말 한마디와 증거 하나가 곧 권력의 균형을 흔든다.",
+      "조사는 진범의 흔적을 모으고, 도구 사용은 독과 증거를 다루는 결정을 만든다."
+    ],
+    "npc_roles": [
+      {
+        "id": "court_physician",
+        "label": "상선 내관",
+        "role": "caretaker",
+        "interaction_hint": "침전과 약재의 흐름을 알고 있다.",
+        "location_index": 0
+      },
+      {
+        "id": "court_lady",
+        "label": "상궁",
+        "role": "rival",
+        "interaction_hint": "누군가의 명을 받고 진실을 흐리려 한다.",
+        "location_index": 1
+      },
+      {
+        "id": "hidden_mastermind",
+        "label": "가려진 흑막",
+        "role": "keeper",
+        "interaction_hint": "밀실 끝에서 거래와 협박을 동시에 건넨다.",
+        "location_index": -1
+      }
+    ],
+    "victory_paths": [
+      {
+        "id": "recovered",
+        "label": "결정적 증좌 확보",
+        "required_action": "INVESTIGATE",
+        "required_location_index": -1,
+        "min_stage": 3,
+        "details": ["evidence_secured", "culprit_exposed"]
+      },
+      {
+        "id": "sealed",
+        "label": "독살 수단 봉인",
+        "required_action": "USE_ITEM",
+        "required_location_index": -1,
+        "min_stage": 3,
+        "details": ["poison_source_neutralized", "scheme_sealed"]
+      },
+      {
+        "id": "bargained",
+        "label": "흑막과 밀약",
+        "required_action": "TALK",
+        "required_location_index": -1,
+        "min_stage": 3,
+        "details": ["mastermind_bargain", "court_balance_shifted"]
+      }
+    ],
+    "alert_actions": ["TALK", "MOVE"],
+    "style_bias": {
+      "INVESTIGATE": {"curious": 1},
+      "TALK": {"diplomatic": 2}
+    }
+  },
+  {
+    "id": "northern_frontier",
+    "title_prefix": "북방 생존선",
+    "summary_prefix": "눈보라와 굶주림, 경계 너머의 위협이 동시에 몰려오는 북방 개척지다.",
+    "tone": "거칠고 절박한 생존",
+    "opening_hook": "바람막이가 찢긴 요새 끝에서 겨울보다 먼저 위기가 들이닥친다.",
+    "rules": [
+      "변방에서는 이동과 소음이 곧 위협을 부르고, 준비 없는 탐색은 피해를 키운다.",
+      "조사는 생존 자원과 적의 징후를 드러내고, 도구 사용은 방벽과 보급을 지켜낸다."
+    ],
+    "npc_roles": [
+      {
+        "id": "quartermaster",
+        "label": "보급관",
+        "role": "caretaker",
+        "interaction_hint": "남은 식량과 방벽의 약점을 알고 있다.",
+        "location_index": 0
+      },
+      {
+        "id": "frontier_scout",
+        "label": "정찰병",
+        "role": "rival",
+        "interaction_hint": "성급한 결단으로 모두를 위험에 빠뜨릴 수 있다.",
+        "location_index": 1
+      },
+      {
+        "id": "border_envoy",
+        "label": "경계의 사자",
+        "role": "keeper",
+        "interaction_hint": "마지막 방어선에서 협상이나 결전을 요구한다.",
+        "location_index": -1
+      }
+    ],
+    "victory_paths": [
+      {
+        "id": "recovered",
+        "label": "생존 물자 확보",
+        "required_action": "INVESTIGATE",
+        "required_location_index": -1,
+        "min_stage": 3,
+        "details": ["supplies_recovered", "frontier_route_secured"]
+      },
+      {
+        "id": "sealed",
+        "label": "방벽 봉쇄",
+        "required_action": "USE_ITEM",
+        "required_location_index": -1,
+        "min_stage": 3,
+        "details": ["breach_sealed", "winter_line_held"]
+      },
+      {
+        "id": "bargained",
+        "label": "경계 협상",
+        "required_action": "TALK",
+        "required_location_index": -1,
+        "min_stage": 3,
+        "details": ["border_pact", "conflict_deferred"]
+      }
+    ],
+    "alert_actions": ["MOVE", "INVESTIGATE", "USE_ITEM"],
+    "style_bias": {
+      "MOVE": {"cautious": 1},
+      "USE_ITEM": {"decisive": 1},
+      "TALK": {"diplomatic": 1}
+    }
   }
 ]
