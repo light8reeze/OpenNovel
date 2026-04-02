@@ -4,6 +4,7 @@ import json
 import math
 import sys
 import time
+from email.utils import parsedate_to_datetime
 from dataclasses import dataclass
 from typing import Any
 
@@ -318,6 +319,7 @@ def _post_json(
 
         if response.status_code >= 400:
             should_retry = attempt < retries and response.status_code in {408, 429, 500, 502, 503, 504}
+            retry_delay_seconds = _retry_delay_seconds(response, attempt) if should_retry else 0.0
             log_llm_error(
                 role="provider",
                 provider=settings.provider,
@@ -329,10 +331,11 @@ def _post_json(
                     "response_text": response.text[:400],
                     "attempt": attempt + 1,
                     "retrying": should_retry,
+                    "retry_delay_seconds": retry_delay_seconds,
                 },
             )
             if should_retry:
-                time.sleep(1.5 * (attempt + 1))
+                time.sleep(retry_delay_seconds)
                 continue
             raise LlmError(f"http request returned {response.status_code}: {response.text}")
         break
@@ -483,6 +486,77 @@ def _parse_json_response_text(
 
 def _is_retryable_http_error(error: httpx.HTTPError) -> bool:
     return isinstance(error, (httpx.ReadTimeout, httpx.ConnectTimeout, httpx.WriteTimeout, httpx.RemoteProtocolError))
+
+
+def _retry_delay_seconds(response: httpx.Response, attempt: int) -> float:
+    header_delay = _parse_retry_after_seconds(response.headers.get("retry-after"))
+    body_delay = _extract_retry_delay_from_body(response)
+    hint_delay = max(header_delay, body_delay)
+    fallback_delay = 1.5 * (attempt + 1)
+    return max(fallback_delay, hint_delay)
+
+
+def _parse_retry_after_seconds(value: str | None) -> float:
+    if not value:
+        return 0.0
+    stripped = value.strip()
+    if not stripped:
+        return 0.0
+    try:
+        return max(0.0, float(stripped))
+    except ValueError:
+        pass
+
+    try:
+        retry_at = parsedate_to_datetime(stripped)
+    except (TypeError, ValueError, IndexError, OverflowError):
+        return 0.0
+
+    if retry_at.tzinfo is None:
+        return 0.0
+    return max(0.0, retry_at.timestamp() - time.time())
+
+
+def _extract_retry_delay_from_body(response: httpx.Response) -> float:
+    try:
+        payload = response.json()
+    except (json.JSONDecodeError, ValueError):
+        return 0.0
+
+    candidates = [
+        payload.get("retryDelay"),
+        payload.get("retry_delay"),
+    ]
+    error_payload = payload.get("error")
+    if isinstance(error_payload, dict):
+        candidates.extend(
+            [
+                error_payload.get("retryDelay"),
+                error_payload.get("retry_delay"),
+            ]
+        )
+
+    for candidate in candidates:
+        parsed = _parse_retry_delay_candidate(candidate)
+        if parsed > 0:
+            return parsed
+    return 0.0
+
+
+def _parse_retry_delay_candidate(value: object) -> float:
+    if isinstance(value, (int, float)):
+        return max(0.0, float(value))
+    if not isinstance(value, str):
+        return 0.0
+    stripped = value.strip()
+    if not stripped:
+        return 0.0
+    if stripped.endswith("s"):
+        stripped = stripped[:-1]
+    try:
+        return max(0.0, float(stripped))
+    except ValueError:
+        return 0.0
 
 
 def _repair_common_json_issues(text: str) -> str | None:

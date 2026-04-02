@@ -64,7 +64,41 @@ class NarratorAgent:
         return self._validate(kind, response, request)
 
     def _retrieve_context(self, kind: str, request: NarrativeRequest) -> RetrievalContext:
-        return self.retrieval.search_for_narrator(kind, request)
+        query = self._build_retrieval_query(kind, request)
+        raw_hits = self.retrieval._query("narrator", query)
+        filtered = [
+            hit
+            for hit in raw_hits
+            if self.retrieval._matches_visibility(hit.metadata, "player")
+            and self.retrieval._matches_location(hit.metadata, request.state_summary.location_id)
+            and not self.retrieval._is_quest_stage_doc(hit.metadata)
+        ]
+        return RetrievalContext(used=bool(filtered), query=query, hits=filtered[: self.retrieval.settings.vector_store.top_k])
+
+    def _build_retrieval_query(self, kind: str, request: NarrativeRequest) -> str:
+        location_name = (request.scene_context.location_name or "").strip()
+        action_type = self._retrieval_action_type(kind, request)
+        tone = (request.world_tone or "").strip()
+        query = " ".join(part for part in [location_name, action_type, tone] if part).strip()
+        if query:
+            return query
+        return " ".join(part for part in [location_name, tone] if part).strip()
+
+    def _retrieval_action_type(self, kind: str, request: NarrativeRequest) -> str:
+        progress_kind = (request.progress_kind or "").strip().lower()
+        action_map = {
+            "investigate": "INVESTIGATE",
+            "talk": "TALK",
+            "move": "MOVE",
+            "reposition": "MOVE",
+            "use_item": "USE_ITEM",
+            "rest": "REST",
+        }
+        if progress_kind in action_map:
+            return action_map[progress_kind]
+        if request.engine_result and request.engine_result.message_code == "GAME_STARTED":
+            return "OPENING"
+        return ""
 
     def _validate(self, kind: str, response: NarrativeResponse, request: NarrativeRequest) -> NarrativeResponse:
         allowed_choices = [choice.strip() for choice in request.allowed_choices if isinstance(choice, str) and choice.strip()]

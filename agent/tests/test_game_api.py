@@ -298,8 +298,12 @@ def test_story_agent_progresses_session_without_engine() -> None:
         response = client.post("/game/action", json={"sessionId": session_id, "inputText": step})
         assert response.status_code == 200
         payload = response.json()
-        assert len(payload["choices"]) >= 2
-        message_codes.append(payload["engineResult"]["message_code"])
+        message_code = payload["engineResult"]["message_code"]
+        if message_code == "OBJECTIVE_COMPLETED":
+            assert payload["choices"] == []
+        else:
+            assert len(payload["choices"]) >= 2
+        message_codes.append(message_code)
     assert all(code for code in message_codes)
     final_state = payload["state"]
     assert final_state["meta"]["turn"] == len(message_codes)
