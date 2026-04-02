@@ -8,6 +8,7 @@ from app.schemas.common import Action, ActionType, EngineResult, SceneContext, S
 from app.schemas.narrative import NarrativeRequest, NarrativeResponse
 from app.schemas.multi_agent import WorldBlueprint, WorldLocation, WorldNpc
 from app.schemas.story_setup import StorySetup
+from app.services.file_logger import log_game_result
 
 
 client = TestClient(app)
@@ -56,6 +57,31 @@ def test_start_game_opening_and_choices_reflect_selected_story_setup() -> None:
     payload = response.json()
     assert selected["title"] in payload["narrative"]
     assert len(payload["choices"]) >= 2
+
+
+def test_debug_sessions_marks_in_memory_sessions_as_active() -> None:
+    stale_session_id = "stale-debug-session"
+    log_game_result(
+        "/game/start",
+        {"sessionId": stale_session_id, "storySetupId": "mud_village"},
+        {
+            "sessionId": stale_session_id,
+            "storySetupId": "mud_village",
+            "state": {"player": {"location_id": "location_1"}},
+        },
+        context={"sessionId": stale_session_id, "turn": 0},
+    )
+
+    live_response = client.post("/game/start", json={"storySetupId": "mud_village"})
+    assert live_response.status_code == 200
+    live_session_id = live_response.json()["sessionId"]
+
+    response = client.get("/debug/sessions", params={"limit": 20})
+    assert response.status_code == 200
+    sessions = {item["sessionId"]: item for item in response.json()["sessions"]}
+
+    assert sessions[live_session_id]["isActive"] is True
+    assert sessions[stale_session_id]["isActive"] is False
 
 
 def test_theme_pack_preserves_story_setup_world_identity() -> None:

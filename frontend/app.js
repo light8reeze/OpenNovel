@@ -637,10 +637,11 @@ function renderDebugSessions() {
   debugSessionsEl.innerHTML = debugSessions
     .map((item) => {
       const active = item.sessionId === selectedDebugSessionId ? " is-active" : "";
+      const status = item.isActive === false ? "inactive" : "live";
       return `
         <button class="debug-item${active}" type="button" data-session-id="${escapeHtml(item.sessionId)}">
           <span class="debug-item-title">${escapeHtml(item.storySetupId || item.sessionId)}</span>
-          <span class="debug-item-meta">turn ${item.latestTurn} / ${escapeHtml(item.lastMessageCode || "n/a")} / ${escapeHtml(item.lastLocationId || "n/a")}</span>
+          <span class="debug-item-meta">${escapeHtml(status)} / turn ${item.latestTurn} / ${escapeHtml(item.lastMessageCode || "n/a")} / ${escapeHtml(item.lastLocationId || "n/a")}</span>
         </button>
       `;
     })
@@ -835,9 +836,12 @@ async function restoreState() {
       const debugResponse = await fetch("/debug/sessions");
       if (debugResponse.ok) {
         const debugData = await debugResponse.json();
-        const knownSession = (debugData.sessions || []).some((item) => item.sessionId === sessionId);
-        if (!knownSession) {
+        const activeSession = (debugData.sessions || []).find((item) => item.sessionId === sessionId);
+        if (!activeSession) {
           throw new Error("restore state skipped for stale session");
+        }
+        if (activeSession.isActive !== true) {
+          throw new Error("restore state skipped for inactive session");
         }
       }
     }
