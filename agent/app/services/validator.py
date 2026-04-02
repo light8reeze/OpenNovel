@@ -66,7 +66,7 @@ class RuleValidator:
         next_state.meta.turn = state.meta.turn + 1
         next_state.meta.seed = state.meta.seed
         validation_flags: list[str] = []
-        progress_kind = self._apply_validated_patch(next_state, world_blueprint, proposal_patch, intent, validation_flags)
+        progress_kind = self._apply_validated_patch(state, next_state, world_blueprint, proposal_patch, intent, validation_flags)
         self._apply_theme_pressure(next_state, world_blueprint, intent)
         self._apply_style_scoring(next_state, world_blueprint, intent)
         completed_victory = self._evaluate_objective(next_state, world_blueprint, intent, progress_kind)
@@ -106,6 +106,7 @@ class RuleValidator:
 
     def _apply_validated_patch(
         self,
+        previous_state: GameState,
         state: GameState,
         world_blueprint: WorldBlueprint,
         patch: dict[str, object],
@@ -155,10 +156,11 @@ class RuleValidator:
                         merged[str(key)] = max(0, min(10, value))
                 state.relations.npc_affinity = merged
 
-        return self._apply_intent_defaults(state, world_blueprint, intent, validation_flags)
+        return self._apply_intent_defaults(previous_state, state, world_blueprint, intent, validation_flags)
 
     def _apply_intent_defaults(
         self,
+        previous_state: GameState,
         state: GameState,
         world_blueprint: WorldBlueprint,
         intent: Action,
@@ -166,9 +168,9 @@ class RuleValidator:
     ) -> str:
         normalized_target = self._normalize_location_id(world_blueprint, intent.target)
         if intent.action_type == ActionType.MOVE and normalized_target and self._is_valid_move_target(
-            world_blueprint, state.player.location_id, normalized_target
+            world_blueprint, previous_state.player.location_id, normalized_target
         ):
-            is_new_location = not self._has_flag(state, f"visited:{normalized_target}")
+            is_new_location = not self._has_flag(previous_state, f"visited:{normalized_target}")
             state.player.location_id = normalized_target
             self._add_flag(state, f"visited:{normalized_target}")
             if is_new_location:
@@ -178,7 +180,7 @@ class RuleValidator:
         elif intent.action_type == ActionType.INVESTIGATE:
             location = self._world_location(world_blueprint, state.player.location_id)
             if location:
-                hook_index = self._next_unseen_hook_index(state, location)
+                hook_index = self._next_unseen_hook_index(previous_state, location)
                 if hook_index is not None:
                     self._add_flag(state, f"hook:{location.id}:{hook_index}")
                     state.quests.story_arc.stage = min(6, state.quests.story_arc.stage + 1)
@@ -190,7 +192,7 @@ class RuleValidator:
         elif intent.action_type == ActionType.TALK:
             npc_id = self._normalize_npc_id(world_blueprint, intent.target) or self._current_npc_id(world_blueprint, state.player.location_id)
             if npc_id:
-                first_meaningful_talk = not self._has_flag(state, f"talked:{npc_id}")
+                first_meaningful_talk = not self._has_flag(previous_state, f"talked:{npc_id}")
                 if first_meaningful_talk:
                     self._add_flag(state, f"talked:{npc_id}")
                     state.quests.story_arc.stage = min(6, state.quests.story_arc.stage + 1)
@@ -201,7 +203,7 @@ class RuleValidator:
             validation_flags.append("no_dialogue_target")
             return "stalled"
         elif intent.action_type == ActionType.USE_ITEM:
-            if "torch_lit" not in state.player.flags:
+            if "torch_lit" not in previous_state.player.flags:
                 self._add_flag(state, "torch_lit")
                 return "use_item"
             if self._available_victory_path(state, world_blueprint, ActionType.USE_ITEM) is not None:
