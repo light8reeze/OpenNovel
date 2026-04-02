@@ -830,21 +830,36 @@ async function restoreState() {
   if (!sessionId) {
     return;
   }
-  const response = await fetch(`/game/state?sessionId=${encodeURIComponent(sessionId)}`);
-  if (!response.ok) {
+  try {
+    if (debugUiEnabled) {
+      const debugResponse = await fetch("/debug/sessions");
+      if (debugResponse.ok) {
+        const debugData = await debugResponse.json();
+        const knownSession = (debugData.sessions || []).some((item) => item.sessionId === sessionId);
+        if (!knownSession) {
+          throw new Error("restore state skipped for stale session");
+        }
+      }
+    }
+    const response = await fetch(`/game/state?sessionId=${encodeURIComponent(sessionId)}`);
+    if (!response.ok) {
+      throw new Error(`restore state failed: ${response.status}`);
+    }
+    const data = await response.json();
+    selectedStorySetupId = data.storySetupId || selectedStorySetupId;
+    if (selectedStorySetupId && storySetups.some((preset) => preset.id === selectedStorySetupId)) {
+      updateStoryTitle(selectedStorySetupId);
+    }
+    renderState(data.state);
+    suggestButton.disabled = false;
+    if (debugUiEnabled && !selectedDebugSessionId) {
+      selectedDebugSessionId = sessionId;
+    }
+  } catch (_error) {
     localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(LEGACY_SESSION_KEY);
     sessionId = null;
-    return;
-  }
-  const data = await response.json();
-  selectedStorySetupId = data.storySetupId || selectedStorySetupId;
-  if (selectedStorySetupId && storySetups.some((preset) => preset.id === selectedStorySetupId)) {
-    updateStoryTitle(selectedStorySetupId);
-  }
-  renderState(data.state);
-  suggestButton.disabled = false;
-  if (debugUiEnabled && !selectedDebugSessionId) {
-    selectedDebugSessionId = sessionId;
+    selectedDebugSessionId = null;
   }
 }
 
