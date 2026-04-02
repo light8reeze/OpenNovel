@@ -38,6 +38,7 @@ coverage/
 .mypy_cache/
 tmp/
 .venv/
+.agents/
 __pycache__/
 *.py[cod]
 *.egg-info/
@@ -45,3 +46,4 @@ build/
 .chroma/
 .artifacts/
 artifacts/
+.gstack/

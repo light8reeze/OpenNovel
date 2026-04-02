@@ -3,13 +3,16 @@
 ## 프로젝트 개요
 
 OpenNovel은 AI 기반 텍스트 인터랙티브 소설 게임이다.  
-현재 `main`의 공식 런타임은 Python `agent` 서버이며, 플레이어 입력과 최신 상태 snapshot을 바탕으로 `StoryAgent`가 다음 장면을 생성한다.
+현재 `main`의 공식 런타임은 Python `agent` 서버이며, 플레이어 입력은 intent 해석, 상태 제안, deterministic validation, narrative 렌더링 단계를 거쳐 처리된다.
 
 핵심 흐름:
 
 ```text
 Player Input
-  -> StoryAgent
+  -> IntenderAgent
+  -> StoryStateManagerAgent
+  -> RuleValidator
+  -> NarratorAgent
   -> Narrative / Choices / Snapshot
   -> Session Update
   -> UI
@@ -18,13 +21,15 @@ Player Input
 ## 현재 아키텍처
 
 주요 문서:
-- Backend: [docs/backend/BACKEND.md](/Users/light8reeze/Documents/Projects/OpenNovel/docs/backend/BACKEND.md)
-- Frontend: [docs/frontend/FRONTEND.md](/Users/light8reeze/Documents/Projects/OpenNovel/docs/frontend/FRONTEND.md)
+- Backend: [docs/backend/BACKEND.md](./docs/backend/BACKEND.md)
+- Frontend: [docs/frontend/FRONTEND.md](./docs/frontend/FRONTEND.md)
 
 현재 구현 요소:
 - Python `agent` 기반 단일 서버
 - startup 시 `StorySetupAgent`가 생성하거나 fallback으로 채우는 3개의 story setup preset
-- `StoryAgent` 중심의 agent-owned story progression
+- `GameSessionService` 중심의 세션 오케스트레이션
+- `WorldBuilderAgent` 기반 world blueprint 생성
+- `RuleValidator` 기반 theme/objective/style 판정
 - direct compatibility endpoint용 `IntenderAgent`, `NarratorAgent`
 - Chroma 기반 retrieval
 - in-memory 세션 저장
@@ -48,12 +53,16 @@ Player Input
 - `state`
 - `current choices`
 - `story_setup`
+- `world_blueprint`
+- `discovery_log`
 
-`StoryAgent`는 다음을 생성한다.
+LLM 계층은 다음을 제안하거나 표현한다.
+- intent action
+- scene summary / state patch proposal
 - narrative
-- choices
-- compatibility state
-- compatibility engine result
+- surfaced choices
+
+상태 전이의 진실은 `RuleValidator`가 확정한다.
 
 ## 현재 상태 구조
 
@@ -79,12 +88,18 @@ Player Input
     "global_flags": ["sunken_ruins_open"],
     "alert_by_region": {
       "ruins": 6
-    }
+    },
+    "theme_id": "sunken_ruins",
+    "theme_rules": ["..."]
   },
   "quests": {
-    "sunken_ruins": {
+    "story_arc": {
       "stage": 0
     }
+  },
+  "objective": {
+    "status": "in_progress",
+    "victory_path": null
   },
   "relations": {
     "npc_affinity": {
@@ -105,7 +120,10 @@ Player Input
 ```text
 Player Input
   -> GameSessionService
-  -> StoryAgent.advance()
+  -> IntenderAgent.handle()
+  -> StoryStateManagerAgent.propose()
+  -> RuleValidator.validate_transition()
+  -> NarratorAgent.render_turn()
   -> TurnResult(narrative, choices, state, engineResult)
   -> Session Update
 ```
@@ -119,7 +137,10 @@ Startup
 
 POST /game/start
   -> story setup 선택
-  -> StoryAgent.start()
+  -> WorldBuilderAgent.build()
+  -> theme pack 적용
+  -> RuleValidator.initialize_world()
+  -> NarratorAgent.render_opening()
   -> opening narrative / state 생성
 ```
 
@@ -135,26 +156,11 @@ Story Context
 Output Format
 ```
 
-### Story Prompt
+### State Proposal Prompt
 
 역할:
-- 플레이어 입력 해석
-- 장면 진행
-- narrative 생성
-- choice 생성
-- state snapshot 생성
-
-입력:
-- current state
-- recent history
-- selected story setup
-- player input
-
-출력:
-- `narrative`
-- `choices`
-- `state`
-- `engineResult`
+- 현재 state와 intent를 바탕으로 다음 장면 요약과 상태 패치 초안을 제안
+- 최종 판정은 하지 않음
 
 ### Intent Parsing Prompt
 
@@ -203,7 +209,7 @@ Story Log
 
 ## 핵심 설계 원칙
 
-1. 현재 `main`에서는 `StoryAgent`가 진행과 표현을 함께 소유한다.
+1. 현재 `main`에서는 `GameSessionService`가 턴 흐름을 오케스트레이션하고, `RuleValidator`가 상태의 진실을 소유한다.
 2. 세션 히스토리와 최신 snapshot이 진실이다.
 3. direct compatibility endpoint는 `IntenderAgent`, `NarratorAgent`로 유지한다.
 4. LLM 출력은 구조화 JSON을 우선한다.

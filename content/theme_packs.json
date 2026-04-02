@@ -1,0 +1,459 @@
+[
+  {
+    "id": "cursed_cathedral",
+    "title_prefix": "저주받은 성당",
+    "summary_prefix": "신성한 금기가 무너진 성당 폐허다. 거짓과 훼손은 곧장 반발을 부른다.",
+    "tone": "경건하지만 위태로운 탐사",
+    "opening_hook": "깨진 제단 너머로 봉인된 핵심 유물이 다시 숨을 쉬기 시작한다.",
+    "rules": [
+      "성당에서는 성급한 훼손과 무례한 행동이 경계를 빠르게 높인다.",
+      "빛과 의식 도구는 봉인과 정화의 실마리가 된다."
+    ],
+    "npc_roles": [
+      {
+        "id": "verger",
+        "label": "문지기 사제",
+        "role": "caretaker",
+        "interaction_hint": "성당의 금기와 봉인 절차를 알고 있다.",
+        "location_index": 0
+      },
+      {
+        "id": "penitent",
+        "label": "속죄 순례자",
+        "role": "rival",
+        "interaction_hint": "유물을 속죄의 증거로 삼으려 한다.",
+        "location_index": 1
+      },
+      {
+        "id": "bound_saint",
+        "label": "묶인 성인",
+        "role": "keeper",
+        "interaction_hint": "핵심 성소에서 거래와 봉인을 제안한다.",
+        "location_index": -1
+      }
+    ],
+    "victory_paths": [
+      {
+        "id": "recovered",
+        "label": "유물 회수",
+        "required_action": "INVESTIGATE",
+        "required_location_index": -1,
+        "min_stage": 3,
+        "details": ["relic_recovered", "sanctum_breached"]
+      },
+      {
+        "id": "sealed",
+        "label": "봉인 복구",
+        "required_action": "USE_ITEM",
+        "required_location_index": -1,
+        "min_stage": 3,
+        "details": ["seal_restored", "holy_rite_completed"]
+      },
+      {
+        "id": "bargained",
+        "label": "수호자와 거래",
+        "required_action": "TALK",
+        "required_location_index": -1,
+        "min_stage": 3,
+        "details": ["guardian_bargain", "sanctum_terms_accepted"]
+      }
+    ],
+    "alert_actions": ["MOVE", "USE_ITEM"],
+    "style_bias": {
+      "USE_ITEM": {"pious": 2},
+      "TALK": {"diplomatic": 1}
+    }
+  },
+  {
+    "id": "fungal_mine",
+    "title_prefix": "균사 광산",
+    "summary_prefix": "포자와 습기가 뒤엉킨 버려진 광산이다. 소음과 불빛은 더 많은 위험을 끌어들인다.",
+    "tone": "숨 막히는 생존 탐사",
+    "opening_hook": "광맥 대신 살아 있는 균사층이 아래에서 천천히 들끓는다.",
+    "rules": [
+      "광산에서는 소음과 불빛이 위험을 빠르게 끌어올린다.",
+      "조사는 자원을 찾게 하지만 오래 머물수록 포자 압력이 높아진다."
+    ],
+    "npc_roles": [
+      {
+        "id": "foreman",
+        "label": "실종된 감독관",
+        "role": "guide",
+        "interaction_hint": "광산의 붕괴 구간과 안전 루트를 안다.",
+        "location_index": 0
+      },
+      {
+        "id": "scavenger",
+        "label": "포자 약탈자",
+        "role": "rival",
+        "interaction_hint": "유물을 현금화할 기회만 찾고 있다.",
+        "location_index": 1
+      },
+      {
+        "id": "mycelial_echo",
+        "label": "균사 메아리",
+        "role": "keeper",
+        "interaction_hint": "깊은 갱도에서 유물과 연결된 의식을 속삭인다.",
+        "location_index": -1
+      }
+    ],
+    "victory_paths": [
+      {
+        "id": "recovered",
+        "label": "핵심 광물 회수",
+        "required_action": "INVESTIGATE",
+        "required_location_index": -1,
+        "min_stage": 3,
+        "details": ["core_sample_recovered", "mine_depth_reached"]
+      },
+      {
+        "id": "sealed",
+        "label": "오염맥 봉쇄",
+        "required_action": "USE_ITEM",
+        "required_location_index": -1,
+        "min_stage": 3,
+        "details": ["spore_vein_sealed", "light_ritual_used"]
+      },
+      {
+        "id": "bargained",
+        "label": "균사와 협약",
+        "required_action": "TALK",
+        "required_location_index": -1,
+        "min_stage": 3,
+        "details": ["spore_pact", "depth_spirit_appeased"]
+      }
+    ],
+    "alert_actions": ["MOVE", "INVESTIGATE", "USE_ITEM"],
+    "style_bias": {
+      "INVESTIGATE": {"curious": 1},
+      "MOVE": {"cautious": 1}
+    }
+  },
+  {
+    "id": "sunken_ruins",
+    "title_prefix": "침수 유적",
+    "summary_prefix": "물에 잠긴 폐허에서는 오래된 장치와 봉인이 천천히 깨어난다.",
+    "tone": "축축하고 음산한 탐사",
+    "opening_hook": "젖은 계단 아래에서 오래된 유적의 중심이 다시 드러난다.",
+    "rules": [
+      "물길이 흔들릴수록 이동과 도구 사용이 더 큰 파문을 만든다.",
+      "깊은 곳일수록 조사와 대화가 숨겨진 진실을 드러낸다."
+    ],
+    "npc_roles": [
+      {
+        "id": "caretaker",
+        "label": "관리인",
+        "role": "caretaker",
+        "interaction_hint": "봉인된 방과 오래된 경고를 되풀이한다.",
+        "location_index": 0
+      },
+      {
+        "id": "free_diver",
+        "label": "잠수꾼",
+        "role": "rival",
+        "interaction_hint": "유적의 중심보다 먼저 보물을 손에 넣고 싶어 한다.",
+        "location_index": 1
+      },
+      {
+        "id": "tidal_oracle",
+        "label": "조수의 예언자",
+        "role": "keeper",
+        "interaction_hint": "성소 깊은 곳에서 유물의 대가를 설명한다.",
+        "location_index": -1
+      }
+    ],
+    "victory_paths": [
+      {
+        "id": "recovered",
+        "label": "유물 인양",
+        "required_action": "INVESTIGATE",
+        "required_location_index": -1,
+        "min_stage": 3,
+        "details": ["relic_raised", "flood_gate_opened"]
+      },
+      {
+        "id": "sealed",
+        "label": "수문 재봉인",
+        "required_action": "USE_ITEM",
+        "required_location_index": -1,
+        "min_stage": 3,
+        "details": ["gate_resealed", "torch_signal_used"]
+      },
+      {
+        "id": "bargained",
+        "label": "예언자와 약속",
+        "required_action": "TALK",
+        "required_location_index": -1,
+        "min_stage": 3,
+        "details": ["oracle_bargain", "depth_oath_sworn"]
+      }
+    ],
+    "alert_actions": ["MOVE", "USE_ITEM"],
+    "style_bias": {
+      "INVESTIGATE": {"curious": 1},
+      "TALK": {"diplomatic": 1}
+    }
+  },
+  {
+    "id": "abandoned_observatory",
+    "title_prefix": "버려진 천문대",
+    "summary_prefix": "관측이 곧 개입이 되는 천문대 폐허다. 본 것과 말한 것이 미래를 비튼다.",
+    "tone": "지적이지만 불길한 탐사",
+    "opening_hook": "닫힌 돔 아래에서 오래된 관측 장치가 다시 별빛을 모은다.",
+    "rules": [
+      "천문대에서는 관측과 대화가 예지와 오해를 동시에 키운다.",
+      "도구 사용은 장치를 깨우지만 과한 개입은 세계를 흔든다."
+    ],
+    "npc_roles": [
+      {
+        "id": "archivist",
+        "label": "기록 보관인",
+        "role": "guide",
+        "interaction_hint": "별자리 기록과 잊힌 실험을 설명할 수 있다.",
+        "location_index": 0
+      },
+      {
+        "id": "star_thief",
+        "label": "별 도둑",
+        "role": "rival",
+        "interaction_hint": "관측 장치를 이용해 미래를 훔치려 한다.",
+        "location_index": 1
+      },
+      {
+        "id": "lens_wraith",
+        "label": "렌즈 망령",
+        "role": "keeper",
+        "interaction_hint": "돔 한가운데서 진실과 대가를 흥정한다.",
+        "location_index": -1
+      }
+    ],
+    "victory_paths": [
+      {
+        "id": "recovered",
+        "label": "관측 핵 회수",
+        "required_action": "INVESTIGATE",
+        "required_location_index": -1,
+        "min_stage": 3,
+        "details": ["star_core_recovered", "observatory_aligned"]
+      },
+      {
+        "id": "sealed",
+        "label": "렌즈 봉인",
+        "required_action": "USE_ITEM",
+        "required_location_index": -1,
+        "min_stage": 3,
+        "details": ["lens_sealed", "device_shutdown"]
+      },
+      {
+        "id": "bargained",
+        "label": "망령과 계약",
+        "required_action": "TALK",
+        "required_location_index": -1,
+        "min_stage": 3,
+        "details": ["wraith_bargain", "future_cost_accepted"]
+      }
+    ],
+    "alert_actions": ["TALK", "USE_ITEM"],
+    "style_bias": {
+      "INVESTIGATE": {"curious": 2},
+      "TALK": {"diplomatic": 1}
+    }
+  },
+  {
+    "id": "mud_village",
+    "title_prefix": "진흙 마을의 의식",
+    "summary_prefix": "고립된 진흙 마을과 산중 제단 사이에서 오래된 실종과 맹세가 뒤엉킨다.",
+    "tone": "음울하고 신비로운 의례",
+    "opening_hook": "안개 속 제단이 오래 묻혀 있던 실종의 흔적과 기억의 대가를 다시 끌어올린다.",
+    "rules": [
+      "의식의 장소에서는 기억, 제물, 맹세가 서로를 자극한다.",
+      "조사는 숨겨진 거래의 전말을 드러내고, 도구 사용은 의식을 봉합하거나 깨운다."
+    ],
+    "npc_roles": [
+      {
+        "id": "mudang",
+        "label": "박수무당",
+        "role": "caretaker",
+        "interaction_hint": "산신과 맺은 오래된 약속과 의식의 금기를 알고 있다.",
+        "location_index": 0
+      },
+      {
+        "id": "village_elder",
+        "label": "마을 이장",
+        "role": "rival",
+        "interaction_hint": "위기를 넘기기 위해 진실을 감추려 한다.",
+        "location_index": 1
+      },
+      {
+        "id": "mountain_spirit",
+        "label": "산신의 메아리",
+        "role": "keeper",
+        "interaction_hint": "제단 앞에서 기억과 대가를 흥정한다.",
+        "location_index": -1
+      }
+    ],
+    "victory_paths": [
+      {
+        "id": "recovered",
+        "label": "잃은 기억 회수",
+        "required_action": "INVESTIGATE",
+        "required_location_index": -1,
+        "min_stage": 3,
+        "details": ["memory_recovered", "oath_truth_revealed"]
+      },
+      {
+        "id": "sealed",
+        "label": "의식 봉합",
+        "required_action": "USE_ITEM",
+        "required_location_index": -1,
+        "min_stage": 3,
+        "details": ["ritual_sealed", "offering_bound"]
+      },
+      {
+        "id": "bargained",
+        "label": "산신과 재협상",
+        "required_action": "TALK",
+        "required_location_index": -1,
+        "min_stage": 3,
+        "details": ["spirit_bargain", "memory_price_renegotiated"]
+      }
+    ],
+    "alert_actions": ["MOVE", "USE_ITEM", "TALK"],
+    "style_bias": {
+      "INVESTIGATE": {"curious": 1},
+      "TALK": {"diplomatic": 1},
+      "USE_ITEM": {"decisive": 1}
+    }
+  },
+  {
+    "id": "royal_investigation",
+    "title_prefix": "궁중 음모",
+    "summary_prefix": "침전과 약방, 밀실 사이에서 독과 비밀이 오가는 궁중 수사다.",
+    "tone": "긴장된 궁중 추리",
+    "opening_hook": "침전 안에 남은 냄새와 침묵이 누군가의 치밀한 손길을 가리킨다.",
+    "rules": [
+      "궁궐에서는 말 한마디와 증거 하나가 곧 권력의 균형을 흔든다.",
+      "조사는 진범의 흔적을 모으고, 도구 사용은 독과 증거를 다루는 결정을 만든다."
+    ],
+    "npc_roles": [
+      {
+        "id": "court_physician",
+        "label": "상선 내관",
+        "role": "caretaker",
+        "interaction_hint": "침전과 약재의 흐름을 알고 있다.",
+        "location_index": 0
+      },
+      {
+        "id": "court_lady",
+        "label": "상궁",
+        "role": "rival",
+        "interaction_hint": "누군가의 명을 받고 진실을 흐리려 한다.",
+        "location_index": 1
+      },
+      {
+        "id": "hidden_mastermind",
+        "label": "가려진 흑막",
+        "role": "keeper",
+        "interaction_hint": "밀실 끝에서 거래와 협박을 동시에 건넨다.",
+        "location_index": -1
+      }
+    ],
+    "victory_paths": [
+      {
+        "id": "recovered",
+        "label": "결정적 증좌 확보",
+        "required_action": "INVESTIGATE",
+        "required_location_index": -1,
+        "min_stage": 3,
+        "details": ["evidence_secured", "culprit_exposed"]
+      },
+      {
+        "id": "sealed",
+        "label": "독살 수단 봉인",
+        "required_action": "USE_ITEM",
+        "required_location_index": -1,
+        "min_stage": 3,
+        "details": ["poison_source_neutralized", "scheme_sealed"]
+      },
+      {
+        "id": "bargained",
+        "label": "흑막과 밀약",
+        "required_action": "TALK",
+        "required_location_index": -1,
+        "min_stage": 3,
+        "details": ["mastermind_bargain", "court_balance_shifted"]
+      }
+    ],
+    "alert_actions": ["TALK", "MOVE"],
+    "style_bias": {
+      "INVESTIGATE": {"curious": 1},
+      "TALK": {"diplomatic": 2}
+    }
+  },
+  {
+    "id": "northern_frontier",
+    "title_prefix": "북방 생존선",
+    "summary_prefix": "눈보라와 굶주림, 경계 너머의 위협이 동시에 몰려오는 북방 개척지다.",
+    "tone": "거칠고 절박한 생존",
+    "opening_hook": "바람막이가 찢긴 요새 끝에서 겨울보다 먼저 위기가 들이닥친다.",
+    "rules": [
+      "변방에서는 이동과 소음이 곧 위협을 부르고, 준비 없는 탐색은 피해를 키운다.",
+      "조사는 생존 자원과 적의 징후를 드러내고, 도구 사용은 방벽과 보급을 지켜낸다."
+    ],
+    "npc_roles": [
+      {
+        "id": "quartermaster",
+        "label": "보급관",
+        "role": "caretaker",
+        "interaction_hint": "남은 식량과 방벽의 약점을 알고 있다.",
+        "location_index": 0
+      },
+      {
+        "id": "frontier_scout",
+        "label": "정찰병",
+        "role": "rival",
+        "interaction_hint": "성급한 결단으로 모두를 위험에 빠뜨릴 수 있다.",
+        "location_index": 1
+      },
+      {
+        "id": "border_envoy",
+        "label": "경계의 사자",
+        "role": "keeper",
+        "interaction_hint": "마지막 방어선에서 협상이나 결전을 요구한다.",
+        "location_index": -1
+      }
+    ],
+    "victory_paths": [
+      {
+        "id": "recovered",
+        "label": "생존 물자 확보",
+        "required_action": "INVESTIGATE",
+        "required_location_index": -1,
+        "min_stage": 3,
+        "details": ["supplies_recovered", "frontier_route_secured"]
+      },
+      {
+        "id": "sealed",
+        "label": "방벽 봉쇄",
+        "required_action": "USE_ITEM",
+        "required_location_index": -1,
+        "min_stage": 3,
+        "details": ["breach_sealed", "winter_line_held"]
+      },
+      {
+        "id": "bargained",
+        "label": "경계 협상",
+        "required_action": "TALK",
+        "required_location_index": -1,
+        "min_stage": 3,
+        "details": ["border_pact", "conflict_deferred"]
+      }
+    ],
+    "alert_actions": ["MOVE", "INVESTIGATE", "USE_ITEM"],
+    "style_bias": {
+      "MOVE": {"cautious": 1},
+      "USE_ITEM": {"decisive": 1},
+      "TALK": {"diplomatic": 1}
+    }
+  }
+]

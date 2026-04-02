@@ -3,7 +3,6 @@ const choicesEl = document.getElementById("choices");
 const stateEl = document.getElementById("state");
 const formEl = document.getElementById("input-form");
 const inputEl = document.getElementById("input");
-const geminiKeyEl = document.getElementById("gemini-key");
 const storyTitleEl = document.getElementById("story-title");
 const storyOriginEl = document.getElementById("story-origin");
 const startButton = document.getElementById("start-button");
@@ -25,8 +24,6 @@ const debugTraceEl = document.getElementById("debug-trace");
 
 const SESSION_KEY = "open-novel-session";
 const LEGACY_SESSION_KEY = "novel-gg-session";
-const GEMINI_KEY_STORAGE = "open-novel-gemini-key";
-const LEGACY_GEMINI_KEY_STORAGE = "novel-gg-gemini-key";
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 let sessionId =
@@ -45,10 +42,6 @@ let pendingRequests = 0;
 
 const debugCache = new Map();
 
-geminiKeyEl.value =
-  localStorage.getItem(GEMINI_KEY_STORAGE) ||
-  localStorage.getItem(LEGACY_GEMINI_KEY_STORAGE) ||
-  "";
 suggestButton.disabled = !sessionId;
 
 function renderStorySetupSelector() {
@@ -100,7 +93,6 @@ function setLoading(isLoading, message = "응답을 기다리는 중...") {
   startButton.disabled = active;
   suggestButton.disabled = active || !sessionId;
   inputEl.disabled = active;
-  geminiKeyEl.disabled = active;
   formEl.querySelector('button[type="submit"]').disabled = active;
   choicesEl.querySelectorAll("button").forEach((button) => {
     button.disabled = active;
@@ -108,6 +100,10 @@ function setLoading(isLoading, message = "응답을 기다리는 중...") {
 }
 
 function renderState(state) {
+  const themeId = state.world?.theme_id || "-";
+  const objectiveStatus = state.objective?.status || "-";
+  const victoryPath = state.objective?.victory_path || "-";
+  const styleTags = (state.player?.style_tags || []).join(", ") || "-";
   stateEl.innerHTML = `
     <dl>
       <dt>Turn</dt><dd>${state.meta.turn}</dd>
@@ -115,6 +111,10 @@ function renderState(state) {
       <dt>Gold</dt><dd>${state.player.gold}</dd>
       <dt>Location</dt><dd>${state.player.location_id}</dd>
       <dt>Story Arc Stage</dt><dd>${state.quests.story_arc.stage}</dd>
+      <dt>Theme</dt><dd>${themeId}</dd>
+      <dt>Objective</dt><dd>${objectiveStatus}</dd>
+      <dt>Victory Path</dt><dd>${victoryPath}</dd>
+      <dt>Style Tags</dt><dd>${styleTags}</dd>
     </dl>
   `;
 }
@@ -791,13 +791,6 @@ function renderTraceStage(title, request, response, meta = {}) {
 async function startGame() {
   setLoading(true, "새 스토리를 구성하는 중...");
   try {
-    const geminiApiKey = geminiKeyEl.value.trim();
-    if (geminiApiKey) {
-      localStorage.setItem(GEMINI_KEY_STORAGE, geminiApiKey);
-    } else {
-      localStorage.removeItem(GEMINI_KEY_STORAGE);
-    }
-
     if (!storySetups.length) {
       await fetchStorySetups();
     }
@@ -808,7 +801,6 @@ async function startGame() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        geminiApiKey: geminiApiKey || undefined,
         storySetupId: selectedStorySetupId || undefined,
       }),
     });
@@ -823,7 +815,7 @@ async function startGame() {
     logEl.innerHTML = "";
     resetTurnHistory();
     appendMessage("ai", data.narrative);
-    renderChoices([]);
+    renderChoices(data.choices || []);
     renderState(data.state);
     appendTurnNode(createStartNode(data));
     if (debugUiEnabled) {
@@ -886,7 +878,7 @@ async function sendAction(payload) {
     });
     const data = await response.json();
     appendMessage("ai", data.narrative);
-    renderChoices([]);
+    renderChoices(data.choices || []);
     renderState(data.state);
     appendTurnNode(createActionNode(payload, data));
     if (debugUiEnabled) {

@@ -25,7 +25,8 @@ class WorldBuilderAgent:
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
             )
-            blueprint = WorldBlueprint.model_validate(result.payload)
+            payload = self._repair_payload(result.payload, story_setup)
+            blueprint = WorldBlueprint.model_validate(payload)
             return WorldBuildResponse(
                 blueprint=self._normalize_blueprint(blueprint, story_setup),
                 source=f"{result.provider}_llm",
@@ -50,6 +51,30 @@ class WorldBuilderAgent:
                 model=self.settings.model,
                 used_fallback=True,
             )
+
+    def _repair_payload(self, payload: object, story_setup: StorySetup) -> object:
+        if not isinstance(payload, dict):
+            return payload
+        required = {"id", "title", "world_summary", "tone", "core_conflict", "player_goal", "opening_hook"}
+        if required.issubset(payload.keys()):
+            return payload
+        template = payload.get("blueprint_template")
+        if isinstance(template, dict):
+            repaired = dict(template)
+            repaired["id"] = story_setup.id
+            repaired["title"] = story_setup.title
+            repaired["world_summary"] = story_setup.world_summary
+            repaired["tone"] = story_setup.tone
+            repaired["core_conflict"] = repaired.get("core_conflict") or story_setup.player_goal
+            repaired["player_goal"] = story_setup.player_goal
+            repaired["opening_hook"] = story_setup.opening_hook
+            return repaired
+        nested_setup = payload.get("story_setup")
+        if isinstance(nested_setup, dict):
+            fallback = self._fallback_blueprint(story_setup).model_dump(mode="json")
+            fallback["core_conflict"] = nested_setup.get("player_goal") or story_setup.player_goal
+            return fallback
+        return payload
 
     def _normalize_blueprint(self, blueprint: WorldBlueprint, story_setup: StorySetup) -> WorldBlueprint:
         locations = self._normalize_locations(blueprint, story_setup)
@@ -212,8 +237,14 @@ class WorldBuilderAgent:
         setup_id = story_setup.id.lower()
         if "city" in setup_id:
             return ["젖은 부두", "안개 골목", "밀수 창고", "종탑 광장"], "항구 경비"
+        if "temple" in setup_id or "shrine" in setup_id:
+            return ["낡은 대웅전", "승방 회랑", "지하 법당", "봉인된 내전"], "노승"
         if "frontier" in setup_id:
             return ["변경 초소", "먼지 협곡", "버려진 급수탑", "깨어난 망루"], "정찰병"
+        if "royal" in setup_id or "palace" in setup_id or "court" in setup_id:
+            return ["침전 앞 회랑", "비밀 서고", "어전 통로", "봉인된 내실"], "상궁"
+        if "manor" in setup_id or "estate" in setup_id:
+            return ["현관 홀", "초상화 복도", "봉인된 서재", "지하 예배실"], "집사"
         return ["폐허 입구", "무너진 회랑", "함정 석실", "깊은 성소"], "관리인"
 
     def _slugify_label(self, value: str, prefix: str = "node") -> str:

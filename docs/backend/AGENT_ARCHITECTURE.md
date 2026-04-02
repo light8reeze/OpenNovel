@@ -6,7 +6,7 @@
 
 * 정적 frontend 서빙
 * `/game/*` 게임 API 제공
-* deterministic game engine 실행
+* deterministic validation 실행
 * LLM 기반 intent / narrative 계층 호출
 * retrieval / vector store 관리
 
@@ -23,20 +23,20 @@ AgentRuntime
     |
 GameSessionService
     |
-+-------------------+-------------------+
-|                   |                   |
-v                   v                   v
-IntenderAgent   Game Engine        NarratorAgent
-                    |
-                    v
-                GameState
++----------------------+------------------------+----------------+
+|                      |                        |                |
+v                      v                        v                v
+IntenderAgent   StoryStateManagerAgent   RuleValidator   NarratorAgent
+                                          |
+                                          v
+                                      GameState
 ```
 
 핵심 원칙:
 
 * `GameSessionService`가 오케스트레이션을 담당한다.
-* `game.engine`이 상태 전이의 진실 소스다.
-* `IntenderAgent`, `NarratorAgent`는 표현 계층이다.
+* `RuleValidator`가 상태 전이의 진실 소스다.
+* `IntenderAgent`, `StoryStateManagerAgent`, `NarratorAgent`는 제안/표현 계층이다.
 * LLM은 상태를 바꾸지 않는다.
 
 ---
@@ -54,7 +54,7 @@ IntenderAgent   Game Engine        NarratorAgent
 * 전체 서비스의 조립 루트
 * 설정 로딩
 * vector store / retrieval 초기화
-* `IntenderAgent`, `NarratorAgent`, `GameSessionService` 생성
+* `IntenderAgent`, `NarratorAgent`, `StoryStateManagerAgent`, `WorldBuilderAgent`, `GameSessionService` 생성
 * startup 시 retrieval 문서 인덱싱
 
 이 클래스는 직접 게임 판정이나 narrative 생성을 수행하지 않는다.
@@ -129,8 +129,10 @@ IntenderAgent   Game Engine        NarratorAgent
 * `/game/*` API의 실제 application service
 * 세션 생성 / 조회 / 갱신
 * 플레이어 입력 처리 흐름 제어
+* world builder 호출
 * intender 호출
-* deterministic engine 호출
+* state manager 호출
+* validator 호출
 * narrator 호출
 * 응답 조립
 
@@ -165,7 +167,9 @@ IntenderAgent   Game Engine        NarratorAgent
 
 * 세션별 런타임 데이터 저장
 * 현재 `GameState`
-* 세션별 narrator 인스턴스
+* 세션별 runtime agent 집합
+* world blueprint
+* discovery log
 
 세션별 narrator를 따로 저장하는 이유:
 
@@ -189,38 +193,27 @@ IntenderAgent   Game Engine        NarratorAgent
 
 ---
 
-## 5. Deterministic Engine 계층
+## 5. Deterministic Validation 계층
 
 파일:
 
-* `agent/app/game/engine.py`
-
-이 계층은 함수 중심으로 구성되어 있으며, 의도적으로 클래스보다 규칙 함수에 무게를 둔다.
+* `agent/app/services/validator.py`
 
 역할:
 
-* 입력을 `Action`으로 해석
-* 허용 액션 계산
-* visible target 계산
-* allowed choice 계산
-* `Event` 생성
-* `GameState` 갱신
+* state patch 검증
+* intent 기본 진행 적용
+* 테마 규칙 반영
+* style scoring 누적
+* objective / victory path 판정
+* allowed choices 재생성
 * `EngineResult` 생성
-
-주요 함수:
-
-* `heuristic_parse_action()`
-* `allowed_actions_for_state()`
-* `visible_targets_for_state()`
-* `choices_for_state()`
-* `resolve_action_input()`
-* `apply_events()`
 
 중요한 설계 포인트:
 
-* 이 계층은 LLM에 의존하지 않는다.
+* 이 계층은 LLM 출력에 종속되지 않는다.
 * 게임의 성공/실패 판정은 여기서 결정된다.
-* `GameSessionService`는 이 결과를 사용만 한다.
+* `GameSessionService`는 이 결과를 오케스트레이션한다.
 
 ---
 
@@ -517,8 +510,8 @@ HTTP Request
   -> AgentRuntime.game.apply_action()
   -> Session lookup
   -> IntenderAgent.handle()
-  -> game.engine.resolve_action_input()
-  -> GameState update
+  -> StoryStateManagerAgent.propose()
+  -> RuleValidator.validate_transition()
   -> NarratorAgent.render_turn()
   -> HTTP Response
 ```
@@ -528,9 +521,10 @@ HTTP Request
 1. 라우터가 `ActionRequest`를 파싱한다.
 2. `GameSessionService`가 세션을 조회한다.
 3. `IntenderAgent`가 입력을 action candidate로 정규화한다.
-4. game engine이 최종 action을 판정하고 `Event`, `EngineResult`, `next_state`를 만든다.
-5. `NarratorAgent`가 `state_summary`, `scene_context`, `engine_result`, `allowed_choices` 기반으로 narrative를 생성한다.
-6. `ActionResponse`가 반환된다.
+4. `StoryStateManagerAgent`가 scene summary와 state patch 초안을 제안한다.
+5. `RuleValidator`가 최종 state, `EngineResult`, allowed choices를 확정한다.
+6. `NarratorAgent`가 `state_summary`, `scene_context`, `engine_result`, `allowed_choices` 기반으로 narrative를 생성한다.
+7. `ActionResponse`가 반환된다.
 
 ---
 
@@ -540,4 +534,4 @@ HTTP Request
 
 * `AgentRuntime`은 객체를 조립한다.
 * `GameSessionService`는 요청 흐름을 오케스트레이션한다.
-* `game.engine`은 상태 전이의 진실 소스이고, `IntenderAgent` / `NarratorAgent`는 표현 계층이다.
+* `RuleValidator`는 상태 전이의 진실 소스이고, `IntenderAgent` / `StoryStateManagerAgent` / `NarratorAgent`는 제안과 표현 계층이다.

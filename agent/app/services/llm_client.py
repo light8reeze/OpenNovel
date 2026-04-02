@@ -202,6 +202,77 @@ class GeminiClient(BaseLlmClient):
         )
 
 
+class AnthropicClient(BaseLlmClient):
+    def __init__(self, settings: RoleModelSettings):
+        if not settings.api_key:
+            raise LlmError("missing role API key")
+        super().__init__(settings)
+        self.base_url = (settings.base_url or "https://api.anthropic.com/v1").rstrip("/")
+
+    def generate_json(
+        self,
+        schema_name: str,
+        schema_model: type[BaseModel],
+        system_prompt: str,
+        user_prompt: str,
+    ) -> LlmJsonResult:
+        payload = {
+            "model": self.settings.model,
+            "max_tokens": 2048,
+            "system": system_prompt,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": f"{user_prompt}\n\nReturn valid JSON only.",
+                }
+            ],
+        }
+        response_json = _post_json(
+            settings=self.settings,
+            url=f"{self.base_url}/messages",
+            headers={
+                "x-api-key": self.settings.api_key,
+                "anthropic-version": "2023-06-01",
+                "Content-Type": "application/json",
+            },
+            payload=payload,
+            timeout_seconds=self.settings.timeout_seconds,
+        )
+        try:
+            blocks = response_json["content"]
+            text = "".join(block.get("text", "") for block in blocks if isinstance(block, dict))
+        except (KeyError, TypeError) as error:
+            log_llm_error(
+                role="provider",
+                provider=self.settings.provider,
+                model=self.settings.model,
+                stage="response_shape",
+                error=str(error),
+                extra={"schema_name": schema_name},
+            )
+            raise LlmError(f"anthropic response shape invalid: {error}") from error
+
+        parsed = _parse_json_response_text(
+            provider=self.settings.provider,
+            model=self.settings.model,
+            schema_name=schema_name,
+            text=text,
+            error_prefix="anthropic content was not valid json",
+        )
+
+        token_usage = _extract_anthropic_token_usage(response_json) or _estimate_token_usage(
+            system_prompt,
+            user_prompt,
+            text,
+        )
+        return LlmJsonResult(
+            payload=parsed,
+            provider=self.settings.provider,
+            model=self.settings.model,
+            token_usage=token_usage,
+        )
+
+
 def build_llm_client(settings: RoleModelSettings) -> BaseLlmClient:
     if settings.provider == "mock":
         return MockLlmClient(settings)
@@ -209,6 +280,8 @@ def build_llm_client(settings: RoleModelSettings) -> BaseLlmClient:
         return OpenAICompatibleClient(settings)
     if settings.provider == "gemini":
         return GeminiClient(settings)
+    if settings.provider == "anthropic":
+        return AnthropicClient(settings)
     raise LlmError(f"unsupported provider: {settings.provider}")
 
 
@@ -309,6 +382,20 @@ def _resolve_gemini_model_id(model: str) -> str:
 
 def _gemini_supports_json_mode(model_id: str) -> bool:
     return not model_id.startswith("gemma-")
+
+
+def _extract_anthropic_token_usage(response_json: dict[str, Any]) -> TokenUsage | None:
+    usage = response_json.get("usage")
+    if not isinstance(usage, dict):
+        return None
+    input_tokens = int(usage.get("input_tokens", 0))
+    output_tokens = int(usage.get("output_tokens", 0))
+    return TokenUsage(
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        total_tokens=input_tokens + output_tokens,
+        estimated=False,
+    )
 
 
 def _extract_json_object(text: str) -> dict[str, Any] | None:

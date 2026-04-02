@@ -5,7 +5,7 @@ Languages: [English](./README.md) | [한국어](./README.ko.md)
 OpenNovel is an AI-powered interactive fiction game.  
 The current `main` branch ships a single Python service that serves both the backend API and the browser UI.
 
-At runtime, the app starts with a small set of story setup presets, opens a session, and lets a `StoryAgent` generate the next scene, choices, and a lightweight compatibility state snapshot.
+At runtime, the app starts with a small set of story setup presets, opens a session, builds a themed world blueprint, validates the turn through deterministic rule logic, and then lets the narrator render the next scene and choices.
 
 ## Current Architecture
 
@@ -15,7 +15,7 @@ High-level flow:
 Player Input
   -> FastAPI Server
   -> GameSessionService
-  -> StoryAgent
+  -> Intender / State Manager / RuleValidator / Narrator
   -> Narrative / Choices / State Snapshot
   -> UI Update
 ```
@@ -23,7 +23,7 @@ Player Input
 Current implementation includes:
 - Python `agent` service as the official runtime
 - startup `StorySetupAgent` that generates or falls back to 3 story presets
-- `StoryAgent`-owned story progression for `/game/*`
+- validator-backed `/game/*` progression with theme/objective state
 - compatibility `IntenderAgent` and `NarratorAgent` endpoints
 - in-memory session storage
 - Chroma-based retrieval
@@ -34,7 +34,7 @@ Current limitations:
 - no persistent database
 - no streaming responses
 - no React/TypeScript frontend
-- compatibility state on `main` still uses dungeon-era field names such as `quests.sunken_ruins.stage`
+- compatibility state still uses dungeon-era field names such as `quests.story_arc.stage`
 
 ## Repository Layout
 

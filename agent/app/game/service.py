@@ -18,13 +18,13 @@ from app.game.models import (
     GameState,
     StartOptions,
     StartResponse,
+    ThemePack,
     StateResponse,
     TurnResult,
-    initial_state,
 )
-from app.schemas.common import SceneContext
-from app.schemas.intent import IntentValidationRequest
-from app.schemas.multi_agent import ValidationResult, WorldBlueprint
+from app.schemas.common import Action, ActionType, SceneContext
+from app.schemas.intent import IntentValidationRequest, IntentValidationResponse
+from app.schemas.multi_agent import ValidationResult, WorldBlueprint, WorldNpc
 from app.schemas.narrative import NarrativeRequest
 from app.schemas.story import StoryMessage
 from app.schemas.story_setup import StorySetup
@@ -103,25 +103,30 @@ class GameSessionService:
         self.counter = count(1)
 
     def start_game(self, options: StartOptions) -> StartResponse:
-        session_id = f"session-{time_ns()}-{next(self.counter)}"
-        state = initial_state()
+        seed = time_ns() % 2_147_483_647
+        session_id = f"session-{seed}-{next(self.counter)}"
         agents = self._build_session_agents(options)
         story_setup = self._select_story_setup(options.story_setup_id)
         world_build = agents.world_builder.build(story_setup)
-        initial_validation = self.validator.initialize_world(world_build.blueprint)
+        themed_blueprint = self._apply_theme_pack(
+            world_build.blueprint,
+            self._select_theme_pack(story_setup, world_build.blueprint, seed),
+        )
+        themed_world_build = world_build.model_copy(update={"blueprint": themed_blueprint})
+        initial_validation = self.validator.initialize_world(themed_blueprint, seed=seed)
         opening_request = NarrativeRequest(
             state_summary=initial_validation.state.summary(),
-            scene_context=self._scene_context(initial_validation.state, world_build.blueprint),
+            scene_context=self._scene_context(initial_validation.state, themed_blueprint),
             engine_result=initial_validation.engine_result,
             allowed_choices=initial_validation.allowed_choices,
             scene_summary=initial_validation.scene_summary,
             progress_kind=initial_validation.progress_kind,
             discovery_log=initial_validation.discovery_log,
-            world_title=world_build.blueprint.title,
-            world_summary=world_build.blueprint.world_summary,
-            world_tone=world_build.blueprint.tone,
-            player_goal=world_build.blueprint.player_goal,
-            opening_hook=world_build.blueprint.opening_hook,
+            world_title=themed_blueprint.title,
+            world_summary=themed_blueprint.world_summary,
+            world_tone=themed_blueprint.tone,
+            player_goal=themed_blueprint.player_goal,
+            opening_hook=themed_blueprint.opening_hook,
         )
         opening = agents.narrator.render_opening(opening_request)
         history = [StoryMessage(role="assistant", content=opening.narrative)]
@@ -132,13 +137,13 @@ class GameSessionService:
                 history=history,
                 choices=opening.choices,
                 story_setup=story_setup,
-                world_blueprint=world_build.blueprint,
+                world_blueprint=themed_blueprint,
                 discovery_log=list(initial_validation.discovery_log),
             )
         response = StartResponse(
             sessionId=session_id,
             narrative=opening.narrative,
-            choices=[],
+            choices=opening.choices,
             state=initial_validation.state,
             storySetupId=story_setup.id,
         )
@@ -146,7 +151,7 @@ class GameSessionService:
             "world_build",
             "/game/start",
             {"storySetupId": story_setup.id},
-            world_build.model_dump(mode="json"),
+            themed_world_build.model_dump(mode="json"),
             context={"sessionId": session_id, "turn": 0},
         )
         log_stage_result(
@@ -154,7 +159,7 @@ class GameSessionService:
             "/game/start",
             {
                 "storySetupId": story_setup.id,
-                "worldBlueprintId": world_build.blueprint.id,
+                "worldBlueprintId": themed_blueprint.id,
             },
             initial_validation.model_dump(mode="json"),
             context={"sessionId": session_id, "turn": 0},
@@ -198,7 +203,7 @@ class GameSessionService:
             state_summary=state.summary(),
             scene_context=self._scene_context(state, world_blueprint),
         )
-        intent = agents.intender.handle(intent_request)
+        intent = self._intent_from_choice(payload, current_choices, state, world_blueprint) or agents.intender.handle(intent_request)
         proposal = agents.state_manager.propose(state, world_blueprint, discovery_log, history, intent.action)
         validation = self.validator.validate_transition(
             state=state,
@@ -239,7 +244,7 @@ class GameSessionService:
             )
         response = ActionResponse(
             narrative=narrative.narrative,
-            choices=[],
+            choices=narrative.choices,
             engineResult=validation.engine_result,
             state=validation.state,
             storySetupId=story_setup.id,
@@ -377,6 +382,238 @@ class GameSessionService:
                     return preset
         return self.story_setups[0]
 
+    def _select_theme_pack(self, story_setup: StorySetup, world_blueprint: WorldBlueprint, seed: int) -> ThemePack | None:
+        if not self.content.theme_packs:
+            return None
+        scored = [
+            (self._theme_score(theme_pack, story_setup, world_blueprint), index, theme_pack)
+            for index, theme_pack in enumerate(self.content.theme_packs)
+        ]
+        best_score, _index, best_pack = max(scored, key=lambda item: (item[0], -item[1]))
+        if best_score > 0:
+            return best_pack
+        return self.content.theme_packs[seed % len(self.content.theme_packs)]
+
+    def _apply_theme_pack(self, world_blueprint: WorldBlueprint, theme_pack: ThemePack | None) -> WorldBlueprint:
+        if theme_pack is None:
+            return world_blueprint
+        themed = world_blueprint.model_copy(deep=True)
+        themed.theme_id = theme_pack.id
+        themed.theme_rules = list(theme_pack.rules)
+        themed.objective_label = "던전의 핵심 대상을 원하는 방식으로 해결한다."
+        themed.npcs = self._build_theme_npcs(world_blueprint, theme_pack)
+        themed.important_npcs = [npc.label for npc in themed.npcs]
+        return themed
+
+    def _theme_score(self, theme_pack: ThemePack, story_setup: StorySetup, world_blueprint: WorldBlueprint) -> int:
+        corpus = " ".join(
+            [
+                story_setup.id,
+                story_setup.title,
+                story_setup.world_summary,
+                story_setup.tone,
+                story_setup.player_goal,
+                story_setup.opening_hook,
+                world_blueprint.id,
+                world_blueprint.title,
+                world_blueprint.world_summary,
+                world_blueprint.tone,
+                world_blueprint.player_goal,
+                world_blueprint.opening_hook,
+                " ".join(location.label for location in world_blueprint.locations),
+            ]
+        ).lower()
+        keyword_groups = {
+            "mud_village": (
+                ("진흙", 5),
+                ("마을", 3),
+                ("실종", 4),
+                ("무당", 5),
+                ("산신", 6),
+                ("제물", 4),
+                ("사당", 2),
+                ("기억", 3),
+                ("의식", 5),
+                ("제단", 3),
+                ("ritual", 5),
+                ("spirit", 4),
+                ("memory", 3),
+            ),
+            "royal_investigation": (
+                ("궁", 5),
+                ("침전", 4),
+                ("왕", 4),
+                ("독", 4),
+                ("어의", 4),
+                ("상궁", 3),
+                ("내관", 3),
+                ("royal", 5),
+                ("court", 5),
+                ("palace", 5),
+                ("poison", 4),
+            ),
+            "northern_frontier": (
+                ("북방", 6),
+                ("개척", 5),
+                ("설원", 4),
+                ("요새", 4),
+                ("보급", 4),
+                ("겨울", 4),
+                ("frontier", 6),
+                ("winter", 4),
+                ("outpost", 4),
+                ("fort", 4),
+                ("survival", 3),
+            ),
+            "cursed_cathedral": (
+                ("사찰", 4),
+                ("성당", 4),
+                ("성소", 3),
+                ("제단", 3),
+                ("사제", 3),
+                ("성물", 2),
+                ("temple", 4),
+                ("cathedral", 4),
+                ("sanctum", 3),
+                ("shrine", 3),
+                ("priest", 3),
+            ),
+            "fungal_mine": (
+                ("광산", 4),
+                ("갱도", 3),
+                ("포자", 4),
+                ("균사", 4),
+                ("광맥", 2),
+                ("mine", 4),
+                ("spore", 4),
+                ("fungal", 4),
+                ("shaft", 2),
+            ),
+            "sunken_ruins": (
+                ("폐허", 3),
+                ("유적", 4),
+                ("침수", 4),
+                ("수문", 3),
+                ("심연", 2),
+                ("젖은", 2),
+                ("ruins", 4),
+                ("sunken", 4),
+                ("flood", 3),
+                ("water", 2),
+            ),
+            "abandoned_observatory": (
+                ("천문", 4),
+                ("별", 3),
+                ("관측", 4),
+                ("기록", 2),
+                ("돔", 2),
+                ("렌즈", 2),
+                ("observatory", 4),
+                ("star", 3),
+                ("astral", 2),
+                ("archive", 2),
+                ("records", 2),
+            ),
+        }
+        return sum(weight for needle, weight in keyword_groups.get(theme_pack.id, ()) if needle in corpus)
+
+    def _intent_from_choice(
+        self,
+        payload: ActionRequest,
+        current_choices: list[str],
+        state: GameState,
+        world_blueprint: WorldBlueprint,
+    ) -> IntentValidationResponse | None:
+        if not payload.choice_text:
+            return None
+        choice_text = payload.choice_text.strip()
+        if not choice_text or choice_text not in current_choices:
+            return None
+
+        location = self._world_location(world_blueprint, state.player.location_id)
+        current_label = self._world_location_name(state.player.location_id, world_blueprint)
+        themed_action = self._theme_action_from_choice(choice_text, state, world_blueprint)
+
+        if themed_action is not None:
+            action = themed_action
+        elif "횃불" in choice_text:
+            action = Action(action_type=ActionType.USE_ITEM, target="횃불", raw_input=choice_text)
+        elif "잠시 숨을 고르" in choice_text or "상황을 정리" in choice_text:
+            action = Action(action_type=ActionType.REST, raw_input=choice_text)
+        elif "조사" in choice_text:
+            action = Action(action_type=ActionType.INVESTIGATE, target=current_label, raw_input=choice_text)
+        elif "대화" in choice_text:
+            target = next(
+                (
+                    npc.label
+                    for npc in self._current_npcs(world_blueprint, state.player.location_id)
+                    if choice_text.startswith(f"{npc.label}{self.validator._topic_particle(npc.label)}")
+                    or choice_text.startswith(npc.label)
+                ),
+                None,
+            )
+            action = Action(action_type=ActionType.TALK, target=target, raw_input=choice_text)
+        elif "이동한다" in choice_text:
+            target = None
+            if location:
+                for connection in location.connections:
+                    label = self._world_location_name(connection, world_blueprint)
+                    if choice_text.startswith(f"{label}{self.validator._direction_particle(label)} 이동한다"):
+                        target = label
+                        break
+            action = Action(action_type=ActionType.MOVE, target=target, raw_input=choice_text)
+        else:
+            return None
+
+        return IntentValidationResponse(
+            action=action,
+            confidence=1.0,
+            validation_flags=["choice_exact_match"],
+            source="choice_match",
+        )
+
+    def _theme_action_from_choice(
+        self,
+        choice_text: str,
+        state: GameState,
+        world_blueprint: WorldBlueprint,
+    ) -> Action | None:
+        theme_pack = next((item for item in self.content.theme_packs if item.id == state.world.theme_id), None)
+        if theme_pack is None:
+            return None
+
+        current_label = self._world_location_name(state.player.location_id, world_blueprint)
+        for victory_path in theme_pack.victory_paths:
+            if victory_path.required_action == ActionType.USE_ITEM.value:
+                exact_choice = f"{current_label}에서 {victory_path.label}{self.validator._object_particle(victory_path.label)} 시도한다"
+                if choice_text == exact_choice or victory_path.label in choice_text:
+                    return Action(action_type=ActionType.USE_ITEM, target=victory_path.label, raw_input=choice_text)
+            elif victory_path.required_action == ActionType.TALK.value and victory_path.label in choice_text:
+                return Action(action_type=ActionType.TALK, target=victory_path.label, raw_input=choice_text)
+            elif victory_path.required_action == ActionType.INVESTIGATE.value and victory_path.label in choice_text:
+                return Action(action_type=ActionType.INVESTIGATE, target=current_label, raw_input=choice_text)
+        return None
+
+    def _build_theme_npcs(self, world_blueprint: WorldBlueprint, theme_pack: ThemePack) -> list[WorldNpc]:
+        if not theme_pack.npc_roles or not world_blueprint.npcs:
+            return world_blueprint.npcs
+        npcs: list[WorldNpc] = []
+        last_index = max(0, len(world_blueprint.locations) - 1)
+        for index, base_npc in enumerate(world_blueprint.npcs):
+            role = theme_pack.npc_roles[min(index, len(theme_pack.npc_roles) - 1)]
+            location_index = role.location_index if role.location_index >= 0 else last_index
+            location_index = min(max(location_index, 0), last_index)
+            npcs.append(
+                WorldNpc(
+                    id=base_npc.id,
+                    label=base_npc.label,
+                    home_location_id=world_blueprint.locations[location_index].id,
+                    role=role.role or base_npc.role,
+                    interaction_hint=role.interaction_hint or base_npc.interaction_hint,
+                )
+            )
+        return npcs
+
     def _game_started_engine_result(self):
         from app.schemas.common import EngineResult
 
@@ -395,6 +632,7 @@ class GameSessionService:
         if current_location:
             visible_targets.extend(self._world_location_name(target_id, world_blueprint) for target_id in current_location.connections[:3])
         visible_targets.extend(npc.label for npc in self._current_npcs(world_blueprint, state.player.location_id)[:2])
+        visible_targets.extend(self._theme_visible_targets(state))
         visible_targets.append("횃불")
         location_name = self._world_location_name(state.player.location_id, world_blueprint)
         npcs = [npc.label for npc in self._current_npcs(world_blueprint, state.player.location_id)]
@@ -420,6 +658,16 @@ class GameSessionService:
         if self._current_npcs(world_blueprint, state.player.location_id):
             actions.insert(1, ActionType.TALK)
         return actions
+
+    def _theme_visible_targets(self, state: GameState) -> list[str]:
+        if state.objective.status == "completed":
+            return []
+        if not state.world.theme_id:
+            return []
+        for theme_pack in self.content.theme_packs:
+            if theme_pack.id == state.world.theme_id:
+                return [path.label for path in theme_pack.victory_paths]
+        return []
 
     def _display_npc_label(self, value: str) -> str:
         if not value:

@@ -35,6 +35,10 @@ class StateSummary(BaseModel):
     gold: int
     story_arc_stage: int
     player_flags: list[str] = Field(default_factory=list)
+    theme_id: Optional[str] = None
+    style_tags: list[str] = Field(default_factory=list)
+    objective_status: Optional[str] = None
+    victory_path: Optional[str] = None
 
 
 class SceneContext(BaseModel):
