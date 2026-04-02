@@ -113,3 +113,49 @@ def test_narrator_completed_objective_returns_terminal_ending_without_choices() 
     assert validated.choices == []
     assert "의식을 봉합" in validated.narrative
     assert "실패" not in validated.narrative
+
+
+def test_validator_uses_highest_danger_location_for_finale_paths() -> None:
+    runtime = get_runtime()
+    validator = runtime.validator
+    blueprint = WorldBlueprint(
+        id="qa_finale_location_regression",
+        title="의식 회귀 테스트",
+        world_summary="결전 지역 계산을 검증한다.",
+        tone="불길함",
+        core_conflict="결전지에서 의식을 끝낸다.",
+        player_goal="의식을 봉합한다.",
+        opening_hook="안개 낀 산길에 선다.",
+        starting_location_id="location_1",
+        theme_id="mud_village",
+        locations=[
+            WorldLocation(id="location_1", label="입구", connections=["location_2"], danger_level=1),
+            WorldLocation(id="location_2", label="중간 길", connections=["location_1", "location_3", "location_4"], danger_level=2),
+            WorldLocation(id="location_3", label="산신령의 영역", connections=["location_2"], danger_level=3),
+            WorldLocation(id="location_4", label="버려진 창고", connections=["location_2"], danger_level=1),
+        ],
+    )
+    state = initial_state(seed=13)
+    state.player.location_id = "location_3"
+    state.player.flags = ["visited:location_1", "visited:location_2", "visited:location_3"]
+    state.world.theme_id = "mud_village"
+    state.quests.story_arc.stage = 5
+
+    allowed_choices = validator._choices_for_state(state, blueprint)
+
+    assert "산신령의 영역에서 의식 봉합을 시도한다" in allowed_choices
+
+    result = validator.validate_transition(
+        state=state,
+        world_blueprint=blueprint,
+        discovery_log=[],
+        intent=Action(action_type=ActionType.USE_ITEM, target="의식 봉합", raw_input="산신령의 영역에서 의식 봉합을 시도한다"),
+        proposal_summary="의식을 마무리한다.",
+        proposal_patch={},
+        proposal_choices=allowed_choices,
+        proposed_facts=[],
+        risk_tags=[],
+    )
+
+    assert result.engine_result.message_code == "OBJECTIVE_COMPLETED"
+    assert result.engine_result.ending_reached == "sealed"

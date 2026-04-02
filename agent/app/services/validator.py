@@ -552,9 +552,7 @@ class RuleValidator:
             return False
         if state.quests.story_arc.stage < victory_path.min_stage:
             return False
-        required_index = victory_path.required_location_index
-        if required_index < 0:
-            required_index = max(0, len(world_blueprint.locations) + required_index)
+        required_index = self._resolve_required_location_index(world_blueprint, victory_path.required_location_index)
         return current_index == required_index
 
     def _can_advance_finale_progress(
@@ -570,9 +568,7 @@ class RuleValidator:
         for victory_path in theme_pack.victory_paths:
             if victory_path.required_action != action_type.value:
                 continue
-            required_index = victory_path.required_location_index
-            if required_index < 0:
-                required_index = max(0, len(world_blueprint.locations) + required_index)
+            required_index = self._resolve_required_location_index(world_blueprint, victory_path.required_location_index)
             if current_index == required_index and state.quests.story_arc.stage < victory_path.min_stage:
                 return True
         return False
@@ -595,8 +591,8 @@ class RuleValidator:
         world_blueprint: WorldBlueprint,
         location: WorldLocation,
     ) -> list[str]:
-        final_index = max(0, len(world_blueprint.locations) - 1)
-        final_location_id = world_blueprint.locations[final_index].id if world_blueprint.locations else None
+        climax_index = self._climax_location_index(world_blueprint)
+        final_location_id = world_blueprint.locations[climax_index].id if world_blueprint.locations else None
         ranked = sorted(
             location.connections,
             key=lambda connection: (
@@ -631,3 +627,19 @@ class RuleValidator:
             if location.id == location_id:
                 return index
         return -1
+
+    def _resolve_required_location_index(self, world_blueprint: WorldBlueprint, required_index: int) -> int:
+        if required_index >= 0:
+            return required_index
+        if required_index == -1:
+            return self._climax_location_index(world_blueprint)
+        return max(0, len(world_blueprint.locations) + required_index)
+
+    def _climax_location_index(self, world_blueprint: WorldBlueprint) -> int:
+        if not world_blueprint.locations:
+            return 0
+        highest_danger = max(location.danger_level for location in world_blueprint.locations)
+        for index in range(len(world_blueprint.locations) - 1, -1, -1):
+            if world_blueprint.locations[index].danger_level == highest_danger:
+                return index
+        return max(0, len(world_blueprint.locations) - 1)
