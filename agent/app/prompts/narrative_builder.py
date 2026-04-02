@@ -62,9 +62,6 @@ Current Scene:
 - hp: {request.state_summary.hp}
 - gold: {request.state_summary.gold}
 - player_flags: {", ".join(request.state_summary.player_flags) or "-"}
-- style_tags: {", ".join(request.state_summary.style_tags) or "-"}
-- objective_status: {request.state_summary.objective_status or "-"}
-- victory_path: {request.state_summary.victory_path or "-"}
 - npcs_in_scene: {", ".join(request.scene_context.npcs_in_scene) or "-"}
 - visible_targets: {", ".join(request.scene_context.visible_targets) or "-"}
 - validated_scene_summary: {request.scene_summary or "-"}
@@ -155,7 +152,7 @@ def _pressure(request: NarrativeRequest) -> str:
 
 
 def _unresolved_threads(request: NarrativeRequest) -> str:
-    threads = [f"- current_goal: {request.player_goal or request.world_summary or '현재 세계의 갈등을 파악해야 한다'}"]
+    threads: list[str] = []
     if request.scene_summary:
         threads.append(f"- validated_scene: {request.scene_summary}")
     if request.scene_context.npcs_in_scene:

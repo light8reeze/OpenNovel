@@ -17,10 +17,9 @@ def build_state_manager_prompts(request: StoryTransitionProposalRequest) -> tupl
         ]
     )
     payload = {
-        "world_blueprint": request.world_blueprint.model_dump(mode="json"),
+        "world_blueprint": _summarize_world_blueprint(request),
         "current_state": request.state.model_dump(mode="json"),
-        "discovery_log": request.discovery_log[-12:],
-        "recent_history": [message.model_dump(mode="json") for message in request.history[-10:]],
+        "discovery_log": request.discovery_log[-5:],
         "intent": request.intent.model_dump(mode="json"),
         "requirements": [
             "Propose the next scene and only a partial state patch.",
@@ -42,3 +41,37 @@ def build_state_manager_prompts(request: StoryTransitionProposalRequest) -> tupl
         },
     }
     return system_prompt, json.dumps(payload, ensure_ascii=False, indent=2)
+
+
+def _summarize_world_blueprint(request: StoryTransitionProposalRequest) -> dict[str, object]:
+    current_location = next(
+        (
+            location
+            for location in request.world_blueprint.locations
+            if location.id == request.state.player.location_id
+        ),
+        None,
+    )
+    return {
+        "id": request.world_blueprint.id,
+        "title": request.world_blueprint.title,
+        "tone": request.world_blueprint.tone,
+        "core_conflict": request.world_blueprint.core_conflict,
+        "theme_id": request.world_blueprint.theme_id,
+        "locations": [
+            {
+                "id": location.id,
+                "label": location.label,
+                "connections": location.connections,
+            }
+            for location in request.world_blueprint.locations
+        ],
+        "npcs": [
+            {
+                "id": npc.id,
+                "label": npc.label,
+            }
+            for npc in request.world_blueprint.npcs
+        ],
+        "current_location_hooks": current_location.investigation_hooks if current_location else [],
+    }
