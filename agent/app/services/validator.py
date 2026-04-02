@@ -74,6 +74,9 @@ class RuleValidator:
         if len(allowed_choices) < 2:
             validation_flags.append("validator_regenerated_choices")
             allowed_choices = self._choices_for_state(next_state, world_blueprint)
+        if completed_victory:
+            allowed_choices = []
+            validation_flags.append("ending_reached_no_choices")
         next_discovery = self._merge_discovery(discovery_log, proposed_facts)
         if risk_tags:
             validation_flags.extend([tag for tag in risk_tags if tag not in validation_flags])
