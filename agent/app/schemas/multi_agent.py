@@ -19,12 +19,29 @@ class WorldLocation(BaseModel):
     investigation_hooks: list[str] = Field(default_factory=list)
 
 
+class NpcBehavior(BaseModel):
+    trigger: str
+    condition: str = ""
+    action: str
+    cooldown_turns: int = 0
+    message: str
+
+
 class WorldNpc(BaseModel):
     id: str
     label: str
     home_location_id: str
     role: str = ""
     interaction_hint: str = ""
+    personality: str = ""
+    behaviors: list[NpcBehavior] = Field(default_factory=list)
+
+
+class NpcEvent(BaseModel):
+    npc_id: str
+    npc_label: str
+    action: str
+    message: str
 
 
 class WorldBlueprint(BaseModel):

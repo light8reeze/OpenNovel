@@ -24,6 +24,7 @@ def build_narrative_prompts(
     game_objective = _game_objective(kind, request)
     pressure = _pressure(request)
     unresolved_threads = _unresolved_threads(request)
+    npc_event_section = _npc_event_section(request)
     outcome_block = _outcome_block(request)
     player_style_section = _player_style_section(request)
     theme_style_hints = _theme_style_hints_section(request)
@@ -89,6 +90,8 @@ Unresolved Threads:
 
 Retrieval Context:
 {retrieval_block}
+
+{npc_event_section}
 
 {outcome_block}
 
@@ -218,6 +221,22 @@ def _unresolved_threads(request: NarrativeRequest) -> str:
     if request.scene_context.visible_targets:
         threads.append(f"- open_paths: {', '.join(request.scene_context.visible_targets)}")
     return "\n".join(threads)
+
+
+def _npc_event_section(request: NarrativeRequest) -> str:
+    if not request.engine_result:
+        return "NPC Events:\n-"
+    event_lines: list[str] = []
+    for detail in request.engine_result.details:
+        if not detail.startswith("npc_event:"):
+            continue
+        parts = detail.split(":", 3)
+        if len(parts) >= 4:
+            _, npc_id, action, message = parts
+            event_lines.append(f"- {npc_id} / {action}: {message}")
+        else:
+            event_lines.append(f"- {detail}")
+    return f"NPC Events:\n{chr(10).join(event_lines) or '-'}"
 
 
 def _outcome_block(request: NarrativeRequest) -> str:

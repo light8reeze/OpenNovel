@@ -4,7 +4,7 @@ from pydantic import ValidationError
 
 from app.config import RoleModelSettings
 from app.prompts.world_builder import build_world_builder_prompts
-from app.schemas.multi_agent import WorldBlueprint, WorldBuildRequest, WorldBuildResponse, WorldLocation, WorldNpc
+from app.schemas.multi_agent import NpcBehavior, WorldBlueprint, WorldBuildRequest, WorldBuildResponse, WorldLocation, WorldNpc
 from app.schemas.story_setup import StorySetup
 from app.services.file_logger import log_llm_error
 from app.services.llm_client import BaseLlmClient, LlmError
@@ -109,6 +109,8 @@ class WorldBuilderAgent:
                 home_location_id=locations[0].id,
                 role="guide",
                 interaction_hint=f"{npc_label}은(는) 현재 상황을 설명하거나 경고를 전할 수 있다.",
+                personality="신중하고 상황 판단이 빠르다.",
+                behaviors=[],
             )
         ]
         return WorldBlueprint(
@@ -183,6 +185,8 @@ class WorldBuilderAgent:
                     home_location_id=home,
                     role=npc.role.strip(),
                     interaction_hint=npc.interaction_hint.strip(),
+                    personality=npc.personality.strip(),
+                    behaviors=self._normalize_behaviors(npc.behaviors),
                 )
             )
         if not npcs:
@@ -194,9 +198,25 @@ class WorldBuilderAgent:
                     home_location_id=locations[0].id,
                     role="guide",
                     interaction_hint=f"{npc_label}은(는) 현재 상황을 설명하거나 경고를 전할 수 있다.",
+                    personality="신중하고 상황 판단이 빠르다.",
+                    behaviors=[],
                 )
             ]
         return npcs
+
+    def _normalize_behaviors(self, behaviors: list[NpcBehavior]) -> list[NpcBehavior]:
+        normalized: list[NpcBehavior] = []
+        for behavior in behaviors[:4]:
+            normalized.append(
+                NpcBehavior(
+                    trigger=behavior.trigger.strip(),
+                    condition=behavior.condition.strip(),
+                    action=behavior.action.strip(),
+                    cooldown_turns=max(0, behavior.cooldown_turns),
+                    message=behavior.message.strip(),
+                )
+            )
+        return normalized
 
     def _build_linear_locations(
         self,
