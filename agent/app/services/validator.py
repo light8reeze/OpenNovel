@@ -316,6 +316,9 @@ class RuleValidator:
         return mapping.get(intent.action_type, "AGENT_CONTINUE")
 
     def _choices_for_state(self, state: GameState, world_blueprint: WorldBlueprint) -> list[str]:
+        return self._generate_choices(state, world_blueprint)
+
+    def _generate_choices(self, state: GameState, world_blueprint: WorldBlueprint) -> list[str]:
         choices: list[str] = []
         repeat_talk_choices: list[str] = []
         location = self._world_location(world_blueprint, state.player.location_id)
@@ -331,6 +334,7 @@ class RuleValidator:
         else:
             choices.append(f"{location_label} 주변을 다시 살피며 놓친 흔적이 없는지 확인한다")
         for npc in self._current_npcs(world_blueprint, state.player.location_id)[:1]:
+            choices.extend(self._style_affinity_choices(state, npc))
             verb = "대화한다"
             talk_choice = f"{npc.label}{self._topic_particle(npc.label)} {verb}"
             if not self._has_flag(state, f"talked:{npc.id}") and npc.interaction_hint:
@@ -364,6 +368,21 @@ class RuleValidator:
             if normalized and normalized not in deduped:
                 deduped.append(normalized)
         return deduped[:6]
+
+    def _style_affinity_choices(self, state: GameState, npc: WorldNpc) -> list[str]:
+        affinity = state.relations.npc_affinity.get(npc.id, 5)
+        if affinity < 7:
+            return []
+        topic_particle = self._topic_particle(npc.label)
+        style_choice_templates = {
+            "cautious": f"{npc.label}의 반응을 살피며 조심스럽게 속내를 확인한다",
+            "diplomatic": f"{npc.label}{topic_particle} 이해관계를 조율하며 협조를 끌어낸다",
+            "curious": f"{npc.label}에게 숨겨 둔 사정을 더 깊게 캐묻는다",
+            "decisive": f"{npc.label}에게 지금 당장 결단을 내려 달라고 요구한다",
+            "pious": f"{npc.label}{topic_particle} 금기와 맹세의 의미를 엄숙하게 확인한다",
+        }
+        style_priority = ["diplomatic", "curious", "cautious", "decisive", "pious"]
+        return [style_choice_templates[tag] for tag in style_priority if tag in state.player.style_tags]
 
     def _world_location(self, world_blueprint: WorldBlueprint, location_id: str) -> WorldLocation | None:
         return next((location for location in world_blueprint.locations if location.id == location_id), None)

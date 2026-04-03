@@ -1,3 +1,8 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
 from app.schemas.narrative import NarrativeRequest
 from app.retrieval.schemas import RetrievalContext
 
@@ -20,6 +25,8 @@ def build_narrative_prompts(
     pressure = _pressure(request)
     unresolved_threads = _unresolved_threads(request)
     outcome_block = _outcome_block(request)
+    player_style_section = _player_style_section(request)
+    theme_style_hints = _theme_style_hints_section(request)
     if request.engine_result and request.engine_result.ending_reached:
         choices_section = "Allowed Choices:\n- (게임 종료 - 선택지 없음)"
     else:
@@ -77,7 +84,7 @@ Current Pressure:
 Unresolved Threads:
 {unresolved_threads}
 
-Player Discoveries:
+{player_style_section}{theme_style_hints}Player Discoveries:
 {chr(10).join(f"- {fact}" for fact in request.discovery_log[-5:]) or "-"}
 
 Retrieval Context:
@@ -101,6 +108,53 @@ Output Contract:
 - 현재 세계관과 location_name에 맞는 어휘를 유지하라
 """
     return system_prompt, user_prompt
+
+
+def _player_style_section(request: NarrativeRequest) -> str:
+    style_tags = [tag.strip() for tag in request.state_summary.style_tags if tag.strip()]
+    if not style_tags:
+        return ""
+    return f"""Player Style:
+- accumulated_tags: {", ".join(style_tags)}
+- directive: 위 성향이 플레이어가 반복해서 보여 준 접근법처럼 장면의 어조와 즉시 떠오르는 선택지에 스며들게 하라
+
+"""
+
+
+def _theme_style_hints_section(request: NarrativeRequest) -> str:
+    theme_pack = _load_theme_pack(request.state_summary.theme_id)
+    if not theme_pack:
+        return ""
+    style_hints = theme_pack.get("style_narrative_hints")
+    if not isinstance(style_hints, dict):
+        return ""
+    matching_hints: list[str] = []
+    for tag in request.state_summary.style_tags:
+        hint = style_hints.get(tag)
+        if isinstance(hint, str) and hint.strip():
+            matching_hints.append(f"- {tag}: {hint.strip()}")
+    if not matching_hints:
+        return ""
+    return f"""Theme Style Hints:
+{chr(10).join(matching_hints)}
+
+"""
+
+
+def _load_theme_pack(theme_id: str | None) -> dict[str, object] | None:
+    if not theme_id:
+        return None
+    theme_packs_path = Path(__file__).resolve().parents[3] / "content" / "theme_packs.json"
+    if not theme_packs_path.exists():
+        return None
+    try:
+        payload = json.loads(theme_packs_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    for item in payload:
+        if isinstance(item, dict) and item.get("id") == theme_id:
+            return item
+    return None
 
 
 def _scene_phase(kind: str, request: NarrativeRequest) -> str:

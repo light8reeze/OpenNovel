@@ -189,6 +189,7 @@ class ThemePack(BaseModel):
     victory_paths: list[ThemeVictoryPath] = Field(default_factory=list)
     alert_actions: list[str] = Field(default_factory=list)
     style_bias: dict[str, dict[str, int]] = Field(default_factory=dict)
+    style_narrative_hints: dict[str, str] = Field(default_factory=dict)
 
 
 class ContentBundle(BaseModel):
