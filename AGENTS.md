@@ -30,6 +30,9 @@ Player Input
 - `GameSessionService` 중심의 세션 오케스트레이션
 - `WorldBuilderAgent` 기반 world blueprint 생성
 - `RuleValidator` 기반 theme/objective/style 판정
+- **Phase 1**: StateManager victory condition awareness, ending narrative fixes, prompt optimization (22% token reduction)
+- **Phase 2-A**: Diegetic feedback - 플레이어 스타일이 narrative 톤과 NPC 반응에 반영
+- **Phase 2-B**: NPC autonomous actions - NPC가 조건 기반으로 자율 행동 (affinity, turn, trigger)
 - direct compatibility endpoint용 `IntenderAgent`, `NarratorAgent`
 - Chroma 기반 retrieval
 - in-memory 세션 저장
@@ -81,7 +84,12 @@ LLM 계층은 다음을 제안하거나 표현한다.
     "inventory": {
       "torch": 1
     },
-    "flags": []
+    "flags": [],
+    "style_scores": {
+      "cautious": 5,
+      "curious": 3
+    },
+    "style_tags": ["cautious", "curious"]
   },
   "world": {
     "time": "night",
@@ -214,3 +222,63 @@ Story Log
 3. direct compatibility endpoint는 `IntenderAgent`, `NarratorAgent`로 유지한다.
 4. LLM 출력은 구조화 JSON을 우선한다.
 5. 실패 시 template / heuristic fallback이 존재한다.
+
+## Phase 2: Diegetic Feedback & NPC Autonomy
+
+### Phase 2-A: Diegetic Feedback for Player Style
+
+**목표**: 플레이어의 누적 스타일(`style_tags`)을 서사에 반영하여 행동 패턴이 narrative 톤과 NPC 반응에 영향을 줌
+
+**구현 내용**:
+- `style_scores`: 액션별 점수 누적 (cautious +1, diplomatic +2, curious +2 등)
+- `style_tags`: 점수 ≥3인 스타일만 태그로 저장
+- Narrator 프롬프트에 **Player Style 섹션** 추가:
+  - `accumulated_tags`를 명시적으로 전달
+  - theme별 `style_narrative_hints`를 주입
+- NPC Affinity + Style 조합 선택지:
+  - affinity ≥7 + diplomatic → "비밀 정보 요청" 특별 선택지
+  - affinity ≥7 + curious → "숨겨진 장소 문의" 특별 선택지
+
+**변경 파일**:
+- `agent/app/prompts/narrative_builder.py`: `_player_style_section()`, `_theme_style_hints_section()`
+- `agent/app/services/validator.py`: affinity + style 조합 로직
+- `content/theme_packs.json`: 모든 theme에 `style_narrative_hints` 추가
+
+### Phase 2-B: NPC Autonomous Actions
+
+**목표**: NPC가 플레이어 행동과 무관하게 자율적으로 행동/반응하는 시스템
+
+**구현 내용**:
+- `NpcBehavior` 모델:
+  - `trigger`: "turn_start", "player_enters", "affinity_threshold"
+  - `condition`: "affinity >= 7", "turn >= 3", "affinity < 5"
+  - `action`: "greet_with_warning", "reveal_secret", "block_path", "offer_item", "express_distrust"
+  - `cooldown_turns`: 재발동 방지
+  - `message`: Narrator가 참고할 힌트
+
+- `WorldNpc` 확장:
+  - `personality`: "cautious_helper", "suspicious", "greedy", "protective"
+  - `behaviors`: NpcBehavior 리스트
+
+- `RuleValidator._check_npc_events()`:
+  - 현재 위치 NPC의 behaviors 체크
+  - condition 평가 (affinity, turn)
+  - cooldown 관리 (state flags)
+  - `engine_result.details`에 `npc_event:{npc_id}:{action}` 추가
+
+- Narrator 프롬프트에 **NPC Events 섹션** 추가:
+  - NPC 자율 행동을 서술에 자연스럽게 포함
+  - "플레이어의 행동 결과와 별개로 일어난 것처럼 묘사"
+
+**콘텐츠**:
+- 7 themes × 3 NPCs × 2 behaviors = 42개 behaviors
+- 예: cursed_cathedral의 "문지기 사제"
+  - turn==0일 때 "greet_with_warning"
+  - affinity>=7일 때 "reveal_secret_path" (쿨다운 99턴)
+
+**변경 파일**:
+- `agent/app/schemas/multi_agent.py`: `NpcBehavior`, `NpcEvent`, `WorldNpc` 확장
+- `agent/app/services/validator.py`: `_check_npc_events()`, condition 평가
+- `agent/app/prompts/narrative_builder.py`: `_npc_event_section()`
+- `agent/app/agents/world_builder.py`: behaviors 보존
+- `content/theme_packs.json`: 42 behaviors 데이터
