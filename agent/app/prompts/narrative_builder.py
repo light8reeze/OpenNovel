@@ -20,6 +20,10 @@ def build_narrative_prompts(
     pressure = _pressure(request)
     unresolved_threads = _unresolved_threads(request)
     outcome_block = _outcome_block(request)
+    if request.engine_result and request.engine_result.ending_reached:
+        choices_section = "Allowed Choices:\n- (게임 종료 - 선택지 없음)"
+    else:
+        choices_section = f"Allowed Choices:\n{chr(10).join(f'- {choice}' for choice in request.allowed_choices) or '-'}"
     system_prompt = SYSTEM_RULES + """
 너의 역할은 validator가 확정한 결과를 바탕으로 장면 묘사와 선택지를 JSON으로 출력하는 것이다.
 출력 형식:
@@ -36,6 +40,7 @@ def build_narrative_prompts(
 - 세계관에 없는 던전 상투어를 임의로 끌어오지 마라.
 - validated_scene_summary가 있으면 그 장면 방향과 사건 결과를 우선 반영하라.
 - progress_kind가 stalled이면 억지 진전을 만들지 말고, 왜 정체되었는지 자연스럽게 드러내라.
+- engine_result에 ending_reached가 있으면 그것이 최종 결말이다. 완료/성취 톤으로 마무리하고 미완료 표현을 쓰지 마라.
 - 선택지는 서로 다른 접근법처럼 보이게 구성하라.
 """
 
@@ -62,9 +67,6 @@ Current Scene:
 - hp: {request.state_summary.hp}
 - gold: {request.state_summary.gold}
 - player_flags: {", ".join(request.state_summary.player_flags) or "-"}
-- style_tags: {", ".join(request.state_summary.style_tags) or "-"}
-- objective_status: {request.state_summary.objective_status or "-"}
-- victory_path: {request.state_summary.victory_path or "-"}
 - npcs_in_scene: {", ".join(request.scene_context.npcs_in_scene) or "-"}
 - visible_targets: {", ".join(request.scene_context.visible_targets) or "-"}
 - validated_scene_summary: {request.scene_summary or "-"}
@@ -90,8 +92,7 @@ Choice Composition Rules:
 - 서로 다른 접근법이 느껴지도록 구성한다
 - 선택지는 2개 이상 4개 이하
 
-Allowed Choices:
-{chr(10).join(f"- {choice}" for choice in request.allowed_choices)}
+{choices_section}
 
 Output Contract:
 - 한국어로 응답하라
@@ -155,7 +156,7 @@ def _pressure(request: NarrativeRequest) -> str:
 
 
 def _unresolved_threads(request: NarrativeRequest) -> str:
-    threads = [f"- current_goal: {request.player_goal or request.world_summary or '현재 세계의 갈등을 파악해야 한다'}"]
+    threads: list[str] = []
     if request.scene_summary:
         threads.append(f"- validated_scene: {request.scene_summary}")
     if request.scene_context.npcs_in_scene:
@@ -171,10 +172,21 @@ def _outcome_block(request: NarrativeRequest) -> str:
 - opening turn
 - 아직 engine result는 없다
 - directive: 첫 장면의 압박과 호기심을 세팅하라"""
+
+    ending_directive = ""
+    if request.engine_result.ending_reached:
+        ending_directive = f"""
+
+⚠️ ENDING DIRECTIVE:
+- 이번 턴에 엔딩 '{request.engine_result.ending_reached}'에 도달했다
+- 반드시 결말/완료/성취 톤으로 마무리하라
+- "아직", "완전히 ~않았다", "다음 행동을 결정해야 한다" 같은 미완료 표현 금지
+- 플레이어의 여정이 의미 있게 마무리되었음을 전달하라"""
+
     return f"""Resolved Outcome:
 - success: {request.engine_result.success}
 - message_code: {request.engine_result.message_code}
 - location_changed: {request.engine_result.location_changed}
 - quest_stage_changed: {request.engine_result.quest_stage_changed}
 - ending_reached: {request.engine_result.ending_reached or "-"}
-- details: {", ".join(request.engine_result.details) or "-"}"""
+- details: {", ".join(request.engine_result.details) or "-"}{ending_directive}"""

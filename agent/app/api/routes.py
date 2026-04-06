@@ -57,7 +57,17 @@ def debug_sessions(limit: int = 20) -> dict[str, Any]:
     runtime = get_runtime()
     if not runtime.settings.debug_ui_enabled:
         raise HTTPException(status_code=404, detail="debug ui disabled")
-    return {"sessions": list_debug_sessions(limit=max(1, min(limit, 100)))}
+    sessions = list_debug_sessions(limit=max(1, min(limit, 100)))
+    active_session_ids = runtime.game.active_session_ids()
+    return {
+        "sessions": [
+            {
+                **item,
+                "isActive": item.get("sessionId") in active_session_ids,
+            }
+            for item in sessions
+        ]
+    }
 
 
 @router.get("/debug/session-turns")

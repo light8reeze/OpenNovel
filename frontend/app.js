@@ -637,10 +637,11 @@ function renderDebugSessions() {
   debugSessionsEl.innerHTML = debugSessions
     .map((item) => {
       const active = item.sessionId === selectedDebugSessionId ? " is-active" : "";
+      const status = item.isActive === false ? "inactive" : "live";
       return `
         <button class="debug-item${active}" type="button" data-session-id="${escapeHtml(item.sessionId)}">
           <span class="debug-item-title">${escapeHtml(item.storySetupId || item.sessionId)}</span>
-          <span class="debug-item-meta">turn ${item.latestTurn} / ${escapeHtml(item.lastMessageCode || "n/a")} / ${escapeHtml(item.lastLocationId || "n/a")}</span>
+          <span class="debug-item-meta">${escapeHtml(status)} / turn ${item.latestTurn} / ${escapeHtml(item.lastMessageCode || "n/a")} / ${escapeHtml(item.lastLocationId || "n/a")}</span>
         </button>
       `;
     })
@@ -830,21 +831,39 @@ async function restoreState() {
   if (!sessionId) {
     return;
   }
-  const response = await fetch(`/game/state?sessionId=${encodeURIComponent(sessionId)}`);
-  if (!response.ok) {
+  try {
+    if (debugUiEnabled) {
+      const debugResponse = await fetch("/debug/sessions");
+      if (debugResponse.ok) {
+        const debugData = await debugResponse.json();
+        const activeSession = (debugData.sessions || []).find((item) => item.sessionId === sessionId);
+        if (!activeSession) {
+          throw new Error("restore state skipped for stale session");
+        }
+        if (activeSession.isActive !== true) {
+          throw new Error("restore state skipped for inactive session");
+        }
+      }
+    }
+    const response = await fetch(`/game/state?sessionId=${encodeURIComponent(sessionId)}`);
+    if (!response.ok) {
+      throw new Error(`restore state failed: ${response.status}`);
+    }
+    const data = await response.json();
+    selectedStorySetupId = data.storySetupId || selectedStorySetupId;
+    if (selectedStorySetupId && storySetups.some((preset) => preset.id === selectedStorySetupId)) {
+      updateStoryTitle(selectedStorySetupId);
+    }
+    renderState(data.state);
+    suggestButton.disabled = false;
+    if (debugUiEnabled && !selectedDebugSessionId) {
+      selectedDebugSessionId = sessionId;
+    }
+  } catch (_error) {
     localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(LEGACY_SESSION_KEY);
     sessionId = null;
-    return;
-  }
-  const data = await response.json();
-  selectedStorySetupId = data.storySetupId || selectedStorySetupId;
-  if (selectedStorySetupId && storySetups.some((preset) => preset.id === selectedStorySetupId)) {
-    updateStoryTitle(selectedStorySetupId);
-  }
-  renderState(data.state);
-  suggestButton.disabled = false;
-  if (debugUiEnabled && !selectedDebugSessionId) {
-    selectedDebugSessionId = sessionId;
+    selectedDebugSessionId = null;
   }
 }
 

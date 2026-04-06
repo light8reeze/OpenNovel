@@ -314,6 +314,10 @@ class GameSessionService:
         log_game_result("/game/choices", {"sessionId": session_id}, response.model_dump(mode="json", by_alias=True))
         return response
 
+    def active_session_ids(self) -> set[str]:
+        with self.lock:
+            return set(self.sessions.keys())
+
     def demo_script(self) -> list[TurnResult]:
         response = self.start_game(StartOptions())
         session_id = response.session_id

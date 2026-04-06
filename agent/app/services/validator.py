@@ -66,7 +66,7 @@ class RuleValidator:
         next_state.meta.turn = state.meta.turn + 1
         next_state.meta.seed = state.meta.seed
         validation_flags: list[str] = []
-        progress_kind = self._apply_validated_patch(next_state, world_blueprint, proposal_patch, intent, validation_flags)
+        progress_kind = self._apply_validated_patch(state, next_state, world_blueprint, proposal_patch, intent, validation_flags)
         self._apply_theme_pressure(next_state, world_blueprint, intent)
         self._apply_style_scoring(next_state, world_blueprint, intent)
         completed_victory = self._evaluate_objective(next_state, world_blueprint, intent, progress_kind)
@@ -74,6 +74,9 @@ class RuleValidator:
         if len(allowed_choices) < 2:
             validation_flags.append("validator_regenerated_choices")
             allowed_choices = self._choices_for_state(next_state, world_blueprint)
+        if completed_victory:
+            allowed_choices = []
+            validation_flags.append("ending_reached_no_choices")
         next_discovery = self._merge_discovery(discovery_log, proposed_facts)
         if risk_tags:
             validation_flags.extend([tag for tag in risk_tags if tag not in validation_flags])
@@ -106,6 +109,7 @@ class RuleValidator:
 
     def _apply_validated_patch(
         self,
+        previous_state: GameState,
         state: GameState,
         world_blueprint: WorldBlueprint,
         patch: dict[str, object],
@@ -155,10 +159,11 @@ class RuleValidator:
                         merged[str(key)] = max(0, min(10, value))
                 state.relations.npc_affinity = merged
 
-        return self._apply_intent_defaults(state, world_blueprint, intent, validation_flags)
+        return self._apply_intent_defaults(previous_state, state, world_blueprint, intent, validation_flags)
 
     def _apply_intent_defaults(
         self,
+        previous_state: GameState,
         state: GameState,
         world_blueprint: WorldBlueprint,
         intent: Action,
@@ -166,9 +171,9 @@ class RuleValidator:
     ) -> str:
         normalized_target = self._normalize_location_id(world_blueprint, intent.target)
         if intent.action_type == ActionType.MOVE and normalized_target and self._is_valid_move_target(
-            world_blueprint, state.player.location_id, normalized_target
+            world_blueprint, previous_state.player.location_id, normalized_target
         ):
-            is_new_location = not self._has_flag(state, f"visited:{normalized_target}")
+            is_new_location = not self._has_flag(previous_state, f"visited:{normalized_target}")
             state.player.location_id = normalized_target
             self._add_flag(state, f"visited:{normalized_target}")
             if is_new_location:
@@ -178,7 +183,7 @@ class RuleValidator:
         elif intent.action_type == ActionType.INVESTIGATE:
             location = self._world_location(world_blueprint, state.player.location_id)
             if location:
-                hook_index = self._next_unseen_hook_index(state, location)
+                hook_index = self._next_unseen_hook_index(previous_state, location)
                 if hook_index is not None:
                     self._add_flag(state, f"hook:{location.id}:{hook_index}")
                     state.quests.story_arc.stage = min(6, state.quests.story_arc.stage + 1)
@@ -190,7 +195,7 @@ class RuleValidator:
         elif intent.action_type == ActionType.TALK:
             npc_id = self._normalize_npc_id(world_blueprint, intent.target) or self._current_npc_id(world_blueprint, state.player.location_id)
             if npc_id:
-                first_meaningful_talk = not self._has_flag(state, f"talked:{npc_id}")
+                first_meaningful_talk = not self._has_flag(previous_state, f"talked:{npc_id}")
                 if first_meaningful_talk:
                     self._add_flag(state, f"talked:{npc_id}")
                     state.quests.story_arc.stage = min(6, state.quests.story_arc.stage + 1)
@@ -201,7 +206,7 @@ class RuleValidator:
             validation_flags.append("no_dialogue_target")
             return "stalled"
         elif intent.action_type == ActionType.USE_ITEM:
-            if "torch_lit" not in state.player.flags:
+            if "torch_lit" not in previous_state.player.flags:
                 self._add_flag(state, "torch_lit")
                 return "use_item"
             if self._available_victory_path(state, world_blueprint, ActionType.USE_ITEM) is not None:
@@ -547,9 +552,7 @@ class RuleValidator:
             return False
         if state.quests.story_arc.stage < victory_path.min_stage:
             return False
-        required_index = victory_path.required_location_index
-        if required_index < 0:
-            required_index = max(0, len(world_blueprint.locations) + required_index)
+        required_index = self._resolve_required_location_index(world_blueprint, victory_path.required_location_index)
         return current_index == required_index
 
     def _can_advance_finale_progress(
@@ -565,9 +568,7 @@ class RuleValidator:
         for victory_path in theme_pack.victory_paths:
             if victory_path.required_action != action_type.value:
                 continue
-            required_index = victory_path.required_location_index
-            if required_index < 0:
-                required_index = max(0, len(world_blueprint.locations) + required_index)
+            required_index = self._resolve_required_location_index(world_blueprint, victory_path.required_location_index)
             if current_index == required_index and state.quests.story_arc.stage < victory_path.min_stage:
                 return True
         return False
@@ -590,8 +591,8 @@ class RuleValidator:
         world_blueprint: WorldBlueprint,
         location: WorldLocation,
     ) -> list[str]:
-        final_index = max(0, len(world_blueprint.locations) - 1)
-        final_location_id = world_blueprint.locations[final_index].id if world_blueprint.locations else None
+        climax_index = self._climax_location_index(world_blueprint)
+        final_location_id = world_blueprint.locations[climax_index].id if world_blueprint.locations else None
         ranked = sorted(
             location.connections,
             key=lambda connection: (
@@ -626,3 +627,19 @@ class RuleValidator:
             if location.id == location_id:
                 return index
         return -1
+
+    def _resolve_required_location_index(self, world_blueprint: WorldBlueprint, required_index: int) -> int:
+        if required_index >= 0:
+            return required_index
+        if required_index == -1:
+            return self._climax_location_index(world_blueprint)
+        return max(0, len(world_blueprint.locations) + required_index)
+
+    def _climax_location_index(self, world_blueprint: WorldBlueprint) -> int:
+        if not world_blueprint.locations:
+            return 0
+        highest_danger = max(location.danger_level for location in world_blueprint.locations)
+        for index in range(len(world_blueprint.locations) - 1, -1, -1):
+            if world_blueprint.locations[index].danger_level == highest_danger:
+                return index
+        return max(0, len(world_blueprint.locations) - 1)
