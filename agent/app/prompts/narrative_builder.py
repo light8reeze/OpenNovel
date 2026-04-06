@@ -50,6 +50,9 @@ def build_narrative_prompts(
 - progress_kind가 stalled이면 억지 진전을 만들지 말고, 왜 정체되었는지 자연스럽게 드러내라.
 - engine_result에 ending_reached가 있으면 그것이 최종 결말이다. 완료/성취 톤으로 마무리하고 미완료 표현을 쓰지 마라.
 - 선택지는 서로 다른 접근법처럼 보이게 구성하라.
+- narrative 안에 다음 선택지로 이어지는 환경적 단서를 자연스럽게 포함시켜라.
+- 선택지 문구를 직접 언급하지 말고, 감각적 묘사로 힌트만 제공하라.
+- 힌트 예시: MOVE→'복도 끝에서 물소리가 들린다', TALK→'그의 눈빛이 무언가를 말하고 있다', INVESTIGATE→'발밑에 살피지 못한 흔적이 보인다'
 """
 
     user_prompt = f"""Campaign Frame:
@@ -101,6 +104,9 @@ Choice Composition Rules:
 - narrative는 자유 입력의 가능성을 열어 둬야 한다
 - 서로 다른 접근법이 느껴지도록 구성한다
 - 선택지는 2개 이상 4개 이하
+- narrative에 각 선택지로 이어지는 환경적 단서를 자연스럽게 포함시켜라
+- 선택지 문구('~로 이동한다', '~와 대화한다')를 직접 사용하지 마라
+- 감각(소리, 빛, 냄새, 시선)이나 상황 묘사로 힌트를 암시하라
 
 {choices_section}
 
