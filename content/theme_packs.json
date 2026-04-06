@@ -15,21 +15,72 @@
         "label": "문지기 사제",
         "role": "caretaker",
         "interaction_hint": "성당의 금기와 봉인 절차를 알고 있다.",
-        "location_index": 0
+        "location_index": 0,
+        "personality": "엄격하고 경계심이 강하지만 무질서를 싫어한다.",
+        "behaviors": [
+          {
+            "trigger": "player_enters",
+            "condition": "turn >= 1",
+            "action": "greet_with_warning",
+            "cooldown_turns": 2,
+            "message": "문지기 사제가 낮은 목소리로 이 성소에서는 경솔한 손짓 하나도 대가를 남긴다고 경고한다."
+          },
+          {
+            "trigger": "affinity_threshold",
+            "condition": "affinity >= 7",
+            "action": "offer_help",
+            "cooldown_turns": 3,
+            "message": "문지기 사제가 봉인 절차의 빠진 순서를 짚어 주며 네가 아직 되돌릴 수 있다고 말한다."
+          }
+        ]
       },
       {
         "id": "penitent",
         "label": "속죄 순례자",
         "role": "rival",
         "interaction_hint": "유물을 속죄의 증거로 삼으려 한다.",
-        "location_index": 1
+        "location_index": 1,
+        "personality": "강박적으로 속죄를 찾으며 타인의 의도를 쉽게 의심한다.",
+        "behaviors": [
+          {
+            "trigger": "turn_start",
+            "condition": "turn >= 2",
+            "action": "watch_silently",
+            "cooldown_turns": 2,
+            "message": "속죄 순례자가 제단 틈에서 너를 지켜보며 입술만 움직인 채 기도를 되뇌인다."
+          },
+          {
+            "trigger": "affinity_threshold",
+            "condition": "affinity < 4",
+            "action": "express_distrust",
+            "cooldown_turns": 2,
+            "message": "속죄 순례자가 네가 유물을 더럽힐 사람이라며 노골적인 불신을 드러낸다."
+          }
+        ]
       },
       {
         "id": "bound_saint",
         "label": "묶인 성인",
         "role": "keeper",
         "interaction_hint": "핵심 성소에서 거래와 봉인을 제안한다.",
-        "location_index": -1
+        "location_index": -1,
+        "personality": "고요하지만 오래된 고통 속에서 거래의 언어를 잊지 않았다.",
+        "behaviors": [
+          {
+            "trigger": "player_enters",
+            "condition": "turn >= 2",
+            "action": "reveal_secret",
+            "cooldown_turns": 3,
+            "message": "묶인 성인이 금이 간 제단 아래에 봉인을 되살릴 마지막 성흔이 남아 있다고 속삭인다."
+          },
+          {
+            "trigger": "turn_start",
+            "condition": "turn >= 4",
+            "action": "beckon_to_bargain",
+            "cooldown_turns": 3,
+            "message": "묶인 성인이 쇠사슬을 울리며 네 선택이 이곳의 죄를 끝낼지 새로 묶을지 묻는다."
+          }
+        ]
       }
     ],
     "victory_paths": [
@@ -62,6 +113,13 @@
     "style_bias": {
       "USE_ITEM": {"pious": 2},
       "TALK": {"diplomatic": 1}
+    },
+    "style_narrative_hints": {
+      "cautious": "성물과 금기를 대할 때는 망설임과 점검의 리듬을 살려, 한 걸음 물러선 경건함이 장면에 배게 한다.",
+      "pious": "기도, 속죄, 봉인의 언어를 더해 플레이어의 행동이 성소의 질서와 응답을 존중하는 듯 보이게 한다.",
+      "diplomatic": "성당의 인물들과 부딪치기보다 죄와 의무를 조율하는 어조로, 갈등이 협상과 중재의 결을 띠게 한다.",
+      "curious": "균열과 제단, 봉인의 흔적을 세심하게 읽어 내려가며 금기의 구조를 밝혀 내는 탐문 톤을 강화한다.",
+      "decisive": "망설이던 의식도 결국 결단의 순간으로 몰아가, 정화나 봉인의 실행 의지가 서술에 분명히 드러나게 한다."
     }
   },
   {
@@ -80,21 +138,72 @@
         "label": "실종된 감독관",
         "role": "guide",
         "interaction_hint": "광산의 붕괴 구간과 안전 루트를 안다.",
-        "location_index": 0
+        "location_index": 0,
+        "personality": "지친 현실주의자지만 생존 가능성을 끝까지 계산한다.",
+        "behaviors": [
+          {
+            "trigger": "player_enters",
+            "condition": "turn >= 1",
+            "action": "offer_help",
+            "cooldown_turns": 2,
+            "message": "실종된 감독관이 무너진 지주목을 가리키며 아직 안전한 우회로가 하나 남았다고 알려 준다."
+          },
+          {
+            "trigger": "turn_start",
+            "condition": "turn >= 3",
+            "action": "greet_with_warning",
+            "cooldown_turns": 2,
+            "message": "실종된 감독관이 포자 흐름이 바뀌었다며 더 큰 소음을 내기 전에 움직이라고 재촉한다."
+          }
+        ]
       },
       {
         "id": "scavenger",
         "label": "포자 약탈자",
         "role": "rival",
         "interaction_hint": "유물을 현금화할 기회만 찾고 있다.",
-        "location_index": 1
+        "location_index": 1,
+        "personality": "계산이 빠르고 탐욕스럽지만 위험 앞에서는 누구보다 민감하다.",
+        "behaviors": [
+          {
+            "trigger": "affinity_threshold",
+            "condition": "affinity < 4",
+            "action": "express_distrust",
+            "cooldown_turns": 2,
+            "message": "포자 약탈자가 네가 자기 몫까지 빼앗아 갈 거라며 손을 무기 가까이에 둔다."
+          },
+          {
+            "trigger": "turn_start",
+            "condition": "turn >= 2",
+            "action": "watch_silently",
+            "cooldown_turns": 1,
+            "message": "포자 약탈자가 광차 뒤에 숨어 네 동선을 재듯 눈빛만 따라온다."
+          }
+        ]
       },
       {
         "id": "mycelial_echo",
         "label": "균사 메아리",
         "role": "keeper",
         "interaction_hint": "깊은 갱도에서 유물과 연결된 의식을 속삭인다.",
-        "location_index": -1
+        "location_index": -1,
+        "personality": "다정한 유혹과 집단 의지를 동시에 품은 낯선 존재다.",
+        "behaviors": [
+          {
+            "trigger": "player_enters",
+            "condition": "turn >= 2",
+            "action": "reveal_secret",
+            "cooldown_turns": 3,
+            "message": "균사 메아리가 벽면 전체를 떨리게 하며 광산 깊숙한 맥이 이미 누군가에게 열렸다고 속삭인다."
+          },
+          {
+            "trigger": "affinity_threshold",
+            "condition": "affinity >= 7",
+            "action": "share_vision",
+            "cooldown_turns": 3,
+            "message": "균사 메아리가 포자 속 환영으로 오염맥을 끊는 정확한 지점을 보여 준다."
+          }
+        ]
       }
     ],
     "victory_paths": [
@@ -127,6 +236,13 @@
     "style_bias": {
       "INVESTIGATE": {"curious": 1},
       "MOVE": {"cautious": 1}
+    },
+    "style_narrative_hints": {
+      "cautious": "포자와 붕락의 위험을 먼저 재며, 숨을 죽이고 발소리를 줄이는 생존 감각이 장면 전반을 이끌게 한다.",
+      "pious": "광산의 살아 있는 균사층을 함부로 다루지 않고, 낯선 생태에 대한 경외와 절제를 드러내는 쪽으로 서술한다.",
+      "diplomatic": "감독관이나 메아리와의 접촉에서 적대보다 공존과 거래의 여지를 읽는 어조를 더한다.",
+      "curious": "습기, 포자, 맥의 변화를 집요하게 관찰하며, 위험 속에서도 더 깊은 구조를 알아내려는 탐색심을 전면에 둔다.",
+      "decisive": "오염맥을 끊거나 길을 정하는 순간에는 주저보다 실행이 앞서는 압박감과 추진력을 강조한다."
     }
   },
   {
@@ -145,21 +261,72 @@
         "label": "관리인",
         "role": "caretaker",
         "interaction_hint": "봉인된 방과 오래된 경고를 되풀이한다.",
-        "location_index": 0
+        "location_index": 0,
+        "personality": "말수는 적지만 유적의 질서를 지키는 데 집착한다.",
+        "behaviors": [
+          {
+            "trigger": "player_enters",
+            "condition": "turn >= 1",
+            "action": "greet_with_warning",
+            "cooldown_turns": 2,
+            "message": "관리인이 젖은 돌계단을 바라보며 수면 아래에서는 발소리조차 빚이 된다고 경고한다."
+          },
+          {
+            "trigger": "affinity_threshold",
+            "condition": "affinity >= 7",
+            "action": "offer_help",
+            "cooldown_turns": 3,
+            "message": "관리인이 잠긴 수문의 오래된 손잡이를 가리키며 네게만 조용히 여는 순서를 알려 준다."
+          }
+        ]
       },
       {
         "id": "free_diver",
         "label": "잠수꾼",
         "role": "rival",
         "interaction_hint": "유적의 중심보다 먼저 보물을 손에 넣고 싶어 한다.",
-        "location_index": 1
+        "location_index": 1,
+        "personality": "대담하고 빈정대지만 위험을 읽는 감각만큼은 정확하다.",
+        "behaviors": [
+          {
+            "trigger": "turn_start",
+            "condition": "turn >= 2",
+            "action": "watch_silently",
+            "cooldown_turns": 1,
+            "message": "잠수꾼이 물웅덩이 건너편에서 네 장비와 손놀림을 묵묵히 훑는다."
+          },
+          {
+            "trigger": "affinity_threshold",
+            "condition": "affinity < 4",
+            "action": "express_distrust",
+            "cooldown_turns": 2,
+            "message": "잠수꾼이 너 때문에 물길이 먼저 뒤집힐 거라며 노골적으로 비웃는다."
+          }
+        ]
       },
       {
         "id": "tidal_oracle",
         "label": "조수의 예언자",
         "role": "keeper",
         "interaction_hint": "성소 깊은 곳에서 유물의 대가를 설명한다.",
-        "location_index": -1
+        "location_index": -1,
+        "personality": "초연하고 느리지만 한 번 정한 대가에는 냉혹하다.",
+        "behaviors": [
+          {
+            "trigger": "player_enters",
+            "condition": "turn >= 2",
+            "action": "reveal_secret",
+            "cooldown_turns": 3,
+            "message": "조수의 예언자가 잠긴 성소의 물결을 짚으며 유물을 올리면 다른 문 하나가 대신 열린다고 알린다."
+          },
+          {
+            "trigger": "turn_start",
+            "condition": "turn >= 4",
+            "action": "summon_tide",
+            "cooldown_turns": 3,
+            "message": "조수의 예언자가 잔잔한 물결을 일으켜 네가 더는 망설일 시간을 잃고 있음을 드러낸다."
+          }
+        ]
       }
     ],
     "victory_paths": [
@@ -192,6 +359,13 @@
     "style_bias": {
       "INVESTIGATE": {"curious": 1},
       "TALK": {"diplomatic": 1}
+    },
+    "style_narrative_hints": {
+      "cautious": "물길과 봉인의 파문을 경계하며, 젖은 돌과 어둠을 한 번 더 확인하는 신중한 움직임이 서술을 지배하게 한다.",
+      "pious": "유적의 오래된 봉인을 모독하지 않으려는 태도를 드러내, 의식과 경고를 함부로 넘지 않는 경외감을 살린다.",
+      "diplomatic": "관리인이나 예언자와의 마찰을 줄이고, 오래된 의무와 이해를 맞춰 가는 협상적 어조를 더한다.",
+      "curious": "침수된 장치와 물결 아래 숨은 흔적을 세세하게 더듬으며, 유적의 진실이 조금씩 드러나는 감각을 강화한다.",
+      "decisive": "수문이나 유물을 두고 망설이기보다, 잠긴 중심부를 향해 결론을 내리려는 추진력이 장면을 앞으로 끌게 한다."
     }
   },
   {
@@ -210,21 +384,72 @@
         "label": "기록 보관인",
         "role": "guide",
         "interaction_hint": "별자리 기록과 잊힌 실험을 설명할 수 있다.",
-        "location_index": 0
+        "location_index": 0,
+        "personality": "침착하고 집요하며 사실을 정리하는 데 강박이 있다.",
+        "behaviors": [
+          {
+            "trigger": "turn_start",
+            "condition": "turn >= 2",
+            "action": "offer_help",
+            "cooldown_turns": 2,
+            "message": "기록 보관인이 오래된 관측 일지를 펼쳐 지금 별빛이 맞물리는 시간을 짚어 준다."
+          },
+          {
+            "trigger": "affinity_threshold",
+            "condition": "affinity >= 7",
+            "action": "reveal_secret",
+            "cooldown_turns": 3,
+            "message": "기록 보관인이 누락된 실험 기록 한 장을 건네며 누가 미래를 먼저 훔쳤는지 알려 준다."
+          }
+        ]
       },
       {
         "id": "star_thief",
         "label": "별 도둑",
         "role": "rival",
         "interaction_hint": "관측 장치를 이용해 미래를 훔치려 한다.",
-        "location_index": 1
+        "location_index": 1,
+        "personality": "재빠르고 허세가 강하지만 패를 읽히는 것을 몹시 싫어한다.",
+        "behaviors": [
+          {
+            "trigger": "player_enters",
+            "condition": "turn >= 1",
+            "action": "watch_silently",
+            "cooldown_turns": 1,
+            "message": "별 도둑이 반쯤 열린 돔 그림자 속에서 네 시선을 피해 움직인다."
+          },
+          {
+            "trigger": "affinity_threshold",
+            "condition": "affinity < 4",
+            "action": "express_distrust",
+            "cooldown_turns": 2,
+            "message": "별 도둑이 네가 관측핵보다 자기 계획을 먼저 망칠 사람이라며 경계한다."
+          }
+        ]
       },
       {
         "id": "lens_wraith",
         "label": "렌즈 망령",
         "role": "keeper",
         "interaction_hint": "돔 한가운데서 진실과 대가를 흥정한다.",
-        "location_index": -1
+        "location_index": -1,
+        "personality": "차갑고 논리적이며 감정보다 대가의 균형을 본다.",
+        "behaviors": [
+          {
+            "trigger": "player_enters",
+            "condition": "turn >= 2",
+            "action": "reveal_secret",
+            "cooldown_turns": 3,
+            "message": "렌즈 망령이 금 간 렌즈 위로 별빛을 모으며 이미 한 번 틀어진 미래의 좌표를 보여 준다."
+          },
+          {
+            "trigger": "turn_start",
+            "condition": "turn == 4",
+            "action": "beckon_to_bargain",
+            "cooldown_turns": 3,
+            "message": "렌즈 망령이 네 선택 하나로 누군가의 내일을 지울 수 있다며 조용히 거래를 제안한다."
+          }
+        ]
       }
     ],
     "victory_paths": [
@@ -275,21 +500,72 @@
         "label": "박수무당",
         "role": "caretaker",
         "interaction_hint": "산신과 맺은 오래된 약속과 의식의 금기를 알고 있다.",
-        "location_index": 0
+        "location_index": 0,
+        "personality": "의례에 엄격하지만 사람을 완전히 버리지는 못하는 인물이다.",
+        "behaviors": [
+          {
+            "trigger": "player_enters",
+            "condition": "turn >= 1",
+            "action": "greet_with_warning",
+            "cooldown_turns": 2,
+            "message": "박수무당이 안개 너머 제단을 향해 고개를 젖히며 함부로 이름을 부르지 말라고 경고한다."
+          },
+          {
+            "trigger": "affinity_threshold",
+            "condition": "affinity >= 7",
+            "action": "offer_help",
+            "cooldown_turns": 3,
+            "message": "박수무당이 제물의 순서와 기억을 되돌리는 짧은 주문을 네게만 가르쳐 준다."
+          }
+        ]
       },
       {
         "id": "village_elder",
         "label": "마을 이장",
         "role": "rival",
         "interaction_hint": "위기를 넘기기 위해 진실을 감추려 한다.",
-        "location_index": 1
+        "location_index": 1,
+        "personality": "체면과 생존을 위해 거짓을 택하는 데 익숙하다.",
+        "behaviors": [
+          {
+            "trigger": "turn_start",
+            "condition": "turn >= 2",
+            "action": "watch_silently",
+            "cooldown_turns": 1,
+            "message": "마을 이장이 흙담 뒤에서 네가 누구의 편에 설지 재듯 시선을 고정한다."
+          },
+          {
+            "trigger": "affinity_threshold",
+            "condition": "affinity < 4",
+            "action": "express_distrust",
+            "cooldown_turns": 2,
+            "message": "마을 이장이 네가 묻는 만큼 마을이 더 깊이 흔들린다며 대놓고 못마땅해한다."
+          }
+        ]
       },
       {
         "id": "mountain_spirit",
         "label": "산신의 메아리",
         "role": "keeper",
         "interaction_hint": "제단 앞에서 기억과 대가를 흥정한다.",
-        "location_index": -1
+        "location_index": -1,
+        "personality": "장엄하고 오래된 존재로, 인간의 약속을 숫자처럼 셈한다.",
+        "behaviors": [
+          {
+            "trigger": "player_enters",
+            "condition": "turn >= 2",
+            "action": "reveal_secret",
+            "cooldown_turns": 3,
+            "message": "산신의 메아리가 제단 아래 묻힌 이름 하나가 모든 실종의 시작이었다고 알려 준다."
+          },
+          {
+            "trigger": "turn_start",
+            "condition": "turn >= 4",
+            "action": "demand_offering",
+            "cooldown_turns": 3,
+            "message": "산신의 메아리가 바람결에 대가 없는 구원은 없다는 말을 되풀이한다."
+          }
+        ]
       }
     ],
     "victory_paths": [
@@ -323,6 +599,13 @@
       "INVESTIGATE": {"curious": 1},
       "TALK": {"diplomatic": 1},
       "USE_ITEM": {"decisive": 1}
+    },
+    "style_narrative_hints": {
+      "cautious": "안개와 제단의 기류를 먼저 읽으며, 함부로 제물을 건드리지 않는 조심스러운 발걸음이 분위기를 이끈다.",
+      "pious": "맹세, 기억, 제물의 무게를 존중하는 어휘를 써서 의식의 엄숙함과 금기를 또렷하게 유지한다.",
+      "diplomatic": "박수무당이나 산신의 메아리와 마주할 때는 요구보다 타협과 재협상의 결을 강조한다.",
+      "curious": "실종의 흔적과 오래된 거래를 한 겹씩 벗겨 내듯, 기억의 파편을 세밀하게 추적하는 톤을 강화한다.",
+      "decisive": "의식을 마무리하거나 대가를 받아들이는 순간에는 머뭇거림 대신 결단의 압력을 전면에 내세운다."
     }
   },
   {
@@ -341,21 +624,72 @@
         "label": "상선 내관",
         "role": "caretaker",
         "interaction_hint": "침전과 약재의 흐름을 알고 있다.",
-        "location_index": 0
+        "location_index": 0,
+        "personality": "예의를 철저히 지키지만 궁중의 공포를 읽는 데 능하다.",
+        "behaviors": [
+          {
+            "trigger": "player_enters",
+            "condition": "turn >= 1",
+            "action": "greet_with_warning",
+            "cooldown_turns": 2,
+            "message": "상선 내관이 침전 문을 반쯤 닫으며 이 안에서는 숨소리까지도 증언이 된다고 경고한다."
+          },
+          {
+            "trigger": "affinity_threshold",
+            "condition": "affinity >= 7",
+            "action": "offer_help",
+            "cooldown_turns": 3,
+            "message": "상선 내관이 사라진 약재 장부의 빈칸을 가리키며 범인의 동선을 조용히 짚어 준다."
+          }
+        ]
       },
       {
         "id": "court_lady",
         "label": "상궁",
         "role": "rival",
         "interaction_hint": "누군가의 명을 받고 진실을 흐리려 한다.",
-        "location_index": 1
+        "location_index": 1,
+        "personality": "우아하지만 계산적이며 권력의 흐름을 먼저 본다.",
+        "behaviors": [
+          {
+            "trigger": "turn_start",
+            "condition": "turn >= 2",
+            "action": "watch_silently",
+            "cooldown_turns": 1,
+            "message": "상궁이 긴 복도 끝에서 부채를 접으며 네 반응 하나하나를 기억해 둔다."
+          },
+          {
+            "trigger": "affinity_threshold",
+            "condition": "affinity < 4",
+            "action": "express_distrust",
+            "cooldown_turns": 2,
+            "message": "상궁이 네 수사가 궁중의 균형을 무너뜨릴 뿐이라며 차갑게 선을 긋는다."
+          }
+        ]
       },
       {
         "id": "hidden_mastermind",
         "label": "가려진 흑막",
         "role": "keeper",
         "interaction_hint": "밀실 끝에서 거래와 협박을 동시에 건넨다.",
-        "location_index": -1
+        "location_index": -1,
+        "personality": "침착하고 잔혹하며 상대의 욕망을 시험하는 데 익숙하다.",
+        "behaviors": [
+          {
+            "trigger": "player_enters",
+            "condition": "turn >= 2",
+            "action": "reveal_secret",
+            "cooldown_turns": 3,
+            "message": "가려진 흑막이 독의 냄새가 약방이 아니라 침전 안에서 먼저 났다고 비웃듯 털어놓는다."
+          },
+          {
+            "trigger": "turn_start",
+            "condition": "turn == 4",
+            "action": "beckon_to_bargain",
+            "cooldown_turns": 3,
+            "message": "가려진 흑막이 진실보다 살아남는 편이 더 값진 밤도 있다고 속삭인다."
+          }
+        ]
       }
     ],
     "victory_paths": [
@@ -406,21 +740,72 @@
         "label": "보급관",
         "role": "caretaker",
         "interaction_hint": "남은 식량과 방벽의 약점을 알고 있다.",
-        "location_index": 0
+        "location_index": 0,
+        "personality": "건조하고 실무적이지만 마지막까지 사람을 챙긴다.",
+        "behaviors": [
+          {
+            "trigger": "turn_start",
+            "condition": "turn >= 2",
+            "action": "offer_help",
+            "cooldown_turns": 2,
+            "message": "보급관이 남은 식량 자루를 세며 아직 버틸 수 있는 배급선을 짚어 준다."
+          },
+          {
+            "trigger": "player_enters",
+            "condition": "turn >= 1",
+            "action": "greet_with_warning",
+            "cooldown_turns": 2,
+            "message": "보급관이 갈라진 방벽을 가리키며 다음 돌풍 전까지 결정을 끝내야 한다고 말한다."
+          }
+        ]
       },
       {
         "id": "frontier_scout",
         "label": "정찰병",
         "role": "rival",
         "interaction_hint": "성급한 결단으로 모두를 위험에 빠뜨릴 수 있다.",
-        "location_index": 1
+        "location_index": 1,
+        "personality": "성급하고 자존심이 강하지만 최전선 감각은 날카롭다.",
+        "behaviors": [
+          {
+            "trigger": "turn_start",
+            "condition": "turn >= 2",
+            "action": "watch_silently",
+            "cooldown_turns": 1,
+            "message": "정찰병이 눈발 사이에서 네가 어느 쪽 방벽을 먼저 볼지 예의주시한다."
+          },
+          {
+            "trigger": "affinity_threshold",
+            "condition": "affinity < 4",
+            "action": "express_distrust",
+            "cooldown_turns": 2,
+            "message": "정찰병이 너 같은 외부인 판단 하나로 경계선이 무너질 수 있다고 쏘아붙인다."
+          }
+        ]
       },
       {
         "id": "border_envoy",
         "label": "경계의 사자",
         "role": "keeper",
         "interaction_hint": "마지막 방어선에서 협상이나 결전을 요구한다.",
-        "location_index": -1
+        "location_index": -1,
+        "personality": "공손하지만 조금의 약함도 놓치지 않는 협상가다.",
+        "behaviors": [
+          {
+            "trigger": "player_enters",
+            "condition": "turn >= 2",
+            "action": "reveal_secret",
+            "cooldown_turns": 3,
+            "message": "경계의 사자가 무너진 설원 표식을 짚으며 누군가가 이미 안쪽에서 문을 열었다고 말한다."
+          },
+          {
+            "trigger": "affinity_threshold",
+            "condition": "affinity >= 7",
+            "action": "offer_truce",
+            "cooldown_turns": 3,
+            "message": "경계의 사자가 피를 더 보기 전에 서로 필요한 것을 교환하자며 휴전을 제안한다."
+          }
+        ]
       }
     ],
     "victory_paths": [

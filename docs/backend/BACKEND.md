@@ -89,7 +89,12 @@ Frontend
     "inventory": {
       "torch": 1
     },
-    "flags": []
+    "flags": [],
+    "style_scores": {
+      "cautious": 5,
+      "curious": 3
+    },
+    "style_tags": ["cautious", "curious"]
   },
   "world": {
     "time": "night",
@@ -230,14 +235,53 @@ Retrieval:
 
 `GET /debug/turn-log`는 이 로그를 묶어서 turn 단위 bundle로 반환한다.
 
-## 8. Current Limitations
+## 8. Phase 2 Features (v1.0.0.0+)
+
+### Phase 2-A: Diegetic Feedback
+
+**구현됨** (`feature/mvp-2nd-expand`)
+
+플레이어의 누적 스타일(`style_tags`)이 narrative 톤과 NPC 반응에 반영됩니다:
+
+- **Player Style Reflection**:
+  - `style_scores`: 액션별 점수 누적
+  - `style_tags`: 점수 ≥3인 스타일만 태그화
+  - Narrator 프롬프트에 Player Style 섹션 추가
+  - Theme별 `style_narrative_hints` 제공
+
+- **NPC Affinity + Style 조합**:
+  - affinity ≥7 + diplomatic → "비밀 정보 요청" 선택지
+  - affinity ≥7 + curious → "숨겨진 장소 문의" 선택지
+
+### Phase 2-B: NPC Autonomous Actions
+
+**구현됨** (`feature/mvp-2nd-expand`)
+
+NPC가 조건 기반으로 자율 행동:
+
+- **NpcBehavior 시스템**:
+  - `trigger`: "turn_start", "player_enters", "affinity_threshold"
+  - `condition`: "affinity >= 7", "turn >= 3"
+  - `action`: 자율 행동 타입
+  - `cooldown_turns`: 재발동 방지
+
+- **Validator Integration**:
+  - `_check_npc_events()`: 조건 평가 및 이벤트 발생
+  - `engine_result.details`에 `npc_event:*` 추가
+
+- **Narrator Integration**:
+  - NPC Events 섹션으로 자율 행동 서술 반영
+
+**콘텐츠**: 7 themes × 3 NPCs × 2 behaviors = 42개
+
+## 9. Current Limitations
 
 아직 없는 것:
 - SQLite / persistent DB
 - streaming response
 - memory summary pipeline
 - React/TypeScript frontend
-- NPC autonomous actions
-- diegetic feedback
+- meta world memory (beyond MVP)
+- multiple objective types (beyond MVP)
 
-즉 `main`의 현재 backend는 validator-backed multi-agent runtime을 가진 MVP 구조다.
+즉 현재 backend는 validator-backed multi-agent runtime + diegetic feedback + NPC autonomy를 가진 Phase 2 MVP 구조다.

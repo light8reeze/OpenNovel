@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import re
 
 from app.game.models import ContentBundle, GameState, ThemePack, ThemeVictoryPath, initial_state
 from app.schemas.common import Action, ActionType, EngineResult
-from app.schemas.multi_agent import ValidationResult, WorldBlueprint, WorldLocation, WorldNpc
+from app.schemas.multi_agent import NpcEvent, ValidationResult, WorldBlueprint, WorldLocation, WorldNpc
 
 
 class RuleValidator:
@@ -69,6 +70,9 @@ class RuleValidator:
         progress_kind = self._apply_validated_patch(state, next_state, world_blueprint, proposal_patch, intent, validation_flags)
         self._apply_theme_pressure(next_state, world_blueprint, intent)
         self._apply_style_scoring(next_state, world_blueprint, intent)
+        npc_events = self._check_npc_events(next_state, world_blueprint, "turn_start")
+        if intent.action_type == ActionType.MOVE and state.player.location_id != next_state.player.location_id:
+            npc_events.extend(self._check_npc_events(next_state, world_blueprint, "player_enters"))
         completed_victory = self._evaluate_objective(next_state, world_blueprint, intent, progress_kind)
         allowed_choices = self._sanitize_choices(next_state, world_blueprint, proposal_choices)
         if len(allowed_choices) < 2:
@@ -87,6 +91,7 @@ class RuleValidator:
             progress_kind,
             validation_flags,
             completed_victory,
+            npc_events,
         )
         scene_summary = self._validated_scene_summary(
             previous=state,
@@ -273,12 +278,18 @@ class RuleValidator:
         progress_kind: str,
         validation_flags: list[str],
         completed_victory: ThemeVictoryPath | None,
+        npc_events: list[NpcEvent],
     ) -> EngineResult:
+        npc_event_details = [
+            f"npc_event:{event.npc_id}:{event.action}:{event.message}"
+            for event in npc_events
+        ]
         if completed_victory is not None:
             details = [
                 intent.action_type.value,
                 f"progress:{progress_kind}",
                 f"victory:{completed_victory.id}",
+                *npc_event_details,
                 *completed_victory.details,
                 *validation_flags,
             ]
@@ -288,7 +299,7 @@ class RuleValidator:
                 location_changed=previous.player.location_id != next_state.player.location_id,
                 quest_stage_changed=previous.quests.story_arc.stage != next_state.quests.story_arc.stage,
                 ending_reached=completed_victory.id,
-                details=details[:6],
+                details=details,
             )
         return EngineResult(
             success=True,
@@ -300,8 +311,9 @@ class RuleValidator:
                 intent.action_type.value,
                 f"progress:{progress_kind}",
                 f"objective:{next_state.objective.status}",
+                *npc_event_details,
                 *validation_flags,
-            ][:6],
+            ],
         )
 
     def _message_code_for(self, intent: Action) -> str:
@@ -316,6 +328,9 @@ class RuleValidator:
         return mapping.get(intent.action_type, "AGENT_CONTINUE")
 
     def _choices_for_state(self, state: GameState, world_blueprint: WorldBlueprint) -> list[str]:
+        return self._generate_choices(state, world_blueprint)
+
+    def _generate_choices(self, state: GameState, world_blueprint: WorldBlueprint) -> list[str]:
         choices: list[str] = []
         repeat_talk_choices: list[str] = []
         location = self._world_location(world_blueprint, state.player.location_id)
@@ -331,6 +346,7 @@ class RuleValidator:
         else:
             choices.append(f"{location_label} 주변을 다시 살피며 놓친 흔적이 없는지 확인한다")
         for npc in self._current_npcs(world_blueprint, state.player.location_id)[:1]:
+            choices.extend(self._style_affinity_choices(state, npc))
             verb = "대화한다"
             talk_choice = f"{npc.label}{self._topic_particle(npc.label)} {verb}"
             if not self._has_flag(state, f"talked:{npc.id}") and npc.interaction_hint:
@@ -365,6 +381,21 @@ class RuleValidator:
                 deduped.append(normalized)
         return deduped[:6]
 
+    def _style_affinity_choices(self, state: GameState, npc: WorldNpc) -> list[str]:
+        affinity = state.relations.npc_affinity.get(npc.id, 5)
+        if affinity < 7:
+            return []
+        topic_particle = self._topic_particle(npc.label)
+        style_choice_templates = {
+            "cautious": f"{npc.label}의 반응을 살피며 조심스럽게 속내를 확인한다",
+            "diplomatic": f"{npc.label}{topic_particle} 이해관계를 조율하며 협조를 끌어낸다",
+            "curious": f"{npc.label}에게 숨겨 둔 사정을 더 깊게 캐묻는다",
+            "decisive": f"{npc.label}에게 지금 당장 결단을 내려 달라고 요구한다",
+            "pious": f"{npc.label}{topic_particle} 금기와 맹세의 의미를 엄숙하게 확인한다",
+        }
+        style_priority = ["diplomatic", "curious", "cautious", "decisive", "pious"]
+        return [style_choice_templates[tag] for tag in style_priority if tag in state.player.style_tags]
+
     def _world_location(self, world_blueprint: WorldBlueprint, location_id: str) -> WorldLocation | None:
         return next((location for location in world_blueprint.locations if location.id == location_id), None)
 
@@ -374,6 +405,72 @@ class RuleValidator:
     def _current_npc_id(self, world_blueprint: WorldBlueprint, location_id: str) -> str | None:
         npcs = self._current_npcs(world_blueprint, location_id)
         return npcs[0].id if npcs else None
+
+    def _check_npc_events(self, state: GameState, world_blueprint: WorldBlueprint, trigger: str) -> list[NpcEvent]:
+        events: list[NpcEvent] = []
+        for npc in world_blueprint.npcs:
+            if trigger == "player_enters" and npc.home_location_id != state.player.location_id:
+                continue
+            for behavior in npc.behaviors:
+                if not self._matches_npc_trigger(behavior.trigger, trigger):
+                    continue
+                if not self._evaluate_npc_condition(behavior.condition, state, npc):
+                    continue
+                if self._npc_event_on_cooldown(state, npc.id, behavior.action, behavior.cooldown_turns):
+                    continue
+                events.append(
+                    NpcEvent(
+                        npc_id=npc.id,
+                        npc_label=npc.label,
+                        action=behavior.action,
+                        message=behavior.message,
+                    )
+                )
+                self._record_npc_event(state, npc.id, behavior.action)
+        return events
+
+    def _matches_npc_trigger(self, behavior_trigger: str, active_trigger: str) -> bool:
+        normalized = behavior_trigger.strip().lower()
+        if normalized == active_trigger:
+            return True
+        return active_trigger == "turn_start" and normalized == "affinity_threshold"
+
+    def _evaluate_npc_condition(self, condition: str, state: GameState, npc: WorldNpc) -> bool:
+        normalized = condition.strip()
+        if not normalized:
+            return True
+        match = re.fullmatch(r"(affinity|turn)\s*(>=|==|<|<=|>)\s*(-?\d+)", normalized)
+        if not match:
+            return False
+        field, operator, raw_value = match.groups()
+        expected = int(raw_value)
+        current = state.relations.npc_affinity.get(npc.id, 5) if field == "affinity" else state.meta.turn
+        if operator == ">=":
+            return current >= expected
+        if operator == "==":
+            return current == expected
+        if operator == "<":
+            return current < expected
+        if operator == "<=":
+            return current <= expected
+        return current > expected
+
+    def _npc_event_on_cooldown(self, state: GameState, npc_id: str, action: str, cooldown_turns: int) -> bool:
+        if cooldown_turns <= 0:
+            return False
+        prefix = f"npc_cooldown:{npc_id}:{action}:"
+        last_turn = -1
+        for flag in state.player.flags:
+            if flag.startswith(prefix):
+                _, _, _, raw_turn = flag.split(":", 3)
+                if raw_turn.isdigit():
+                    last_turn = max(last_turn, int(raw_turn))
+        if last_turn < 0:
+            return False
+        return state.meta.turn - last_turn <= cooldown_turns
+
+    def _record_npc_event(self, state: GameState, npc_id: str, action: str) -> None:
+        self._add_flag(state, f"npc_cooldown:{npc_id}:{action}:{state.meta.turn}")
 
     def _location_label(self, world_blueprint: WorldBlueprint, location_id: str) -> str:
         location = self._world_location(world_blueprint, location_id)
